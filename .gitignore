@@ -1,0 +1,15 @@
+# Archives
+*.zip
+
+# PDF (gross, liegt als HTML-Version im Repo)
+*.pdf
+
+# Arbeitskopien
+*- Kopie*
+*- Copy*
+
+# Visual Studio / PowerShell Studio Artefakte
+*.bak
+*.tmp
+Thumbs.db
+desktop.ini

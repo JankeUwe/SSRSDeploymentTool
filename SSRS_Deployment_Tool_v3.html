@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSRS Report Deployment Tool v3 – Entwickler-Dokumentation</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & Basis ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --c-bg:        #f4f6f9;
+    --c-panel:     #ffffff;
+    --c-header:    #00467f;
+    --c-accent:    #0072c6;
+    --c-accent2:   #005a9e;
+    --c-ok:        #008040;
+    --c-warn:      #be6400;
+    --c-err:       #b41e1e;
+    --c-skip:      #6e6ea0;
+    --c-logbg:     #12141c;
+    --c-logfg:     #c8d4e0;
+    --c-border:    #d8e0ea;
+    --c-text:      #1a1a2e;
+    --c-muted:     #5a6478;
+    --c-tag-bg:    #e8f0fa;
+    --c-tag-txt:   #0072c6;
+    --c-code-bg:   #1a1e2e;
+    --radius:      6px;
+    --shadow:      0 1px 4px rgba(0,70,127,.10);
+    --shadow-md:   0 2px 12px rgba(0,70,127,.13);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    background: var(--c-bg);
+    color: var(--c-text);
+  }
+
+  /* ── Haupt-Content-Wrapper ─────────────────────────────────── */
+  .content-wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  /* ── Artikel-Header (Breadcrumb + Tags) ────────────────────── */
+  .article-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--c-muted);
+  }
+  .article-meta .sep { color: var(--c-border); }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: var(--c-tag-bg);
+    color: var(--c-tag-txt);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+  }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+  /* ── Seitentitel ───────────────────────────────────────────── */
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--c-header);
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+  .page-subtitle {
+    font-size: 16px;
+    color: var(--c-muted);
+    margin-bottom: 22px;
+    font-weight: 400;
+  }
+
+  /* ── Toc-Navigation ────────────────────────────────────────── */
+  .toc {
+    background: var(--c-panel);
+    border: 1px solid var(--c-border);
+    border-left: 4px solid var(--c-accent);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    margin-bottom: 36px;
+    box-shadow: var(--shadow);
+  }
+  .toc-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--c-accent);
+    margin-bottom: 12px;
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 4px 24px;
+  }
+  .toc a {
+    font-size: 13.5px;
+    color: var(--c-accent);
+    text-decoration: none;
+    padding: 2px 0;
+    display: block;
+  }
+  .toc a:hover { text-decoration: underline; color: var(--c-header); }
+
+  /* ── Abschnitt / Section ───────────────────────────────────── */
+  .section { margin-bottom: 48px; }
+
+  .section-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--c-muted);
+    margin-bottom: 8px;
+  }
+
+  h2.sec-title {
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--c-header);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--c-accent);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2.sec-title .sec-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: var(--c-header);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  h3.sub-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--c-accent);
+    margin: 20px 0 10px;
+  }
+
+  p { margin-bottom: 12px; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Infobox / Hinweis ─────────────────────────────────────── */
+  .infobox {
+    background: #edf4ff;
+    border-left: 4px solid var(--c-accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  .infobox strong { color: var(--c-header); }
+
+  .warnbox {
+    background: #fff8ed;
+    border-left: 4px solid var(--c-warn);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+
+  /* ── Tabellen ──────────────────────────────────────────────── */
+  .tbl-wrap {
+    overflow-x: auto;
+    margin: 16px 0 22px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--c-panel);
+    font-size: 13.5px;
+  }
+  thead tr { background: var(--c-header); }
+  thead th {
+    color: #fff;
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 14px;
+    white-space: nowrap;
+  }
+  tbody tr:nth-child(even) { background: #f7fafd; }
+  tbody tr:hover { background: #edf4ff; transition: background .15s; }
+  tbody td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--c-border);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td code, th code {
+    background: #e8f0fa;
+    color: var(--c-accent2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+  }
+
+  /* ── Code-Block ────────────────────────────────────────────── */
+  .code-block {
+    background: var(--c-code-bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin: 14px 0 20px;
+    box-shadow: var(--shadow-md);
+  }
+  .code-header {
+    background: #0e1020;
+    padding: 7px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #2a2e44;
+  }
+  .code-lang {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: #6699cc;
+    font-family: 'Courier New', monospace;
+  }
+  .code-dots { display: flex; gap: 5px; }
+  .code-dots span {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .code-dots span:nth-child(1) { background: #ff5f57; }
+  .code-dots span:nth-child(2) { background: #febc2e; }
+  .code-dots span:nth-child(3) { background: #28c840; }
+  .code-block pre {
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--c-logfg);
+    white-space: pre;
+  }
+  .code-block .kw  { color: #c792ea; }
+  .code-block .fn  { color: #82aaff; }
+  .code-block .str { color: #c3e88d; }
+  .code-block .cmt { color: #546e7a; font-style: italic; }
+  .code-block .var { color: #f78c6c; }
+  .code-block .op  { color: #89ddff; }
+
+  /* ── Listen ────────────────────────────────────────────────── */
+  ul.doc-list, ol.doc-list {
+    padding-left: 22px;
+    margin: 8px 0 14px;
+  }
+  ul.doc-list li, ol.doc-list li {
+    margin-bottom: 6px;
+    line-height: 1.55;
+  }
+
+  /* ── GUI-Mockup ────────────────────────────────────────────── */
+  .gui-mockup {
+    background: #e8edf4;
+    border: 1px solid #c0ccd8;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    margin: 16px 0 24px;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 12px;
+  }
+  .gui-titlebar {
+    background: var(--c-header);
+    color: #fff;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .gui-winctrls { display: flex; gap: 6px; }
+  .gui-winctrls span {
+    width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+    background: rgba(255,255,255,.3); font-size: 10px; text-align: center; line-height: 12px;
+  }
+  .gui-body { padding: 10px; background: #f0f2f5; display: flex; gap: 10px; }
+  .gui-grp {
+    background: #fff;
+    border: 1px solid #c0ccd8;
+    border-radius: 4px;
+    padding: 8px 10px;
+  }
+  .gui-grp-title {
+    font-size: 11px; font-weight: 700; color: var(--c-header);
+    border-bottom: 1px solid #d0dae6; margin-bottom: 6px; padding-bottom: 4px;
+  }
+  .gui-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .gui-label { font-size: 11px; color: #444; min-width: 110px; text-align: right; }
+  .gui-input {
+    flex: 1; background: #fff; border: 1px solid #b0c0d0;
+    border-radius: 2px; padding: 2px 6px; font-size: 11px; color: #333;
+    min-width: 0;
+  }
+  .gui-btn {
+    padding: 2px 10px; background: var(--c-accent); color: #fff;
+    border: none; border-radius: 2px; font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
+  .gui-log {
+    background: #12141c; color: #c8d4e0; font-family: 'Courier New', monospace;
+    font-size: 11px; padding: 8px; border-radius: 4px; margin-top: 4px;
+    line-height: 1.6; min-height: 70px;
+  }
+  .log-ok   { color: #20c060; }
+  .log-info { color: #c8d4e0; }
+  .log-hdr  { color: #0072c6; }
+  .log-warn { color: #d0780a; }
+  .log-skip { color: #8888c0; }
+
+  /* ── Statistik-Kacheln ─────────────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+    margin: 16px 0 24px;
+  }
+  .stat-card {
+    background: var(--c-panel);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+    border-top: 3px solid var(--c-accent);
+  }
+  .stat-num {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--c-header);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--c-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  /* ── Farbtabelle ───────────────────────────────────────────── */
+  .color-dot {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 6px;
+    border: 1px solid rgba(0,0,0,.1);
+  }
+
+  /* ── Footer-Leiste des Artikels ────────────────────────────── */
+  .article-footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--c-border);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .footer-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .footer-meta { font-size: 13px; color: var(--c-muted); }
+
+  /* ── Responsive ────────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .content-wrap { padding: 20px 14px 48px; }
+    .page-title { font-size: 22px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .toc-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="content-wrap">
+
+  <!-- ── Artikel-Meta ─────────────────────────────────────────── -->
+  <div class="article-meta">
+    <span>SQL Blog</span>
+    <span class="sep">/</span>
+    <span>PowerShell Automation</span>
+    <span class="sep">/</span>
+    <span>SSRS Deployment Tool</span>
+  </div>
+
+  <div class="tag-row">
+    <span class="tag">PowerShell</span>
+    <span class="tag">SSRS</span>
+    <span class="tag">REST API v2.0</span>
+    <span class="tag">WinForms</span>
+    <span class="tag">·</span>
+    <span class="tag" style="background:#f0f4f8;color:#5a6478;">April 2025</span>
+    <span class="tag" style="background:#f0f4f8;color:#5a6478;">Entwickler-Dokumentation</span>
+  </div>
+
+  <h1 class="page-title">SSRS Report Deployment Tool&ensp;v3.0</h1>
+  <p class="page-subtitle">
+    Standardisiertes SSRS-Deployment per WinForms-GUI und REST API v2.0.
+    Dieses Dokument beschreibt Konfiguration, Ablauf und technische Verfahren
+    für Entwickler und Administratoren.
+  </p>
+
+  <!-- ── Inhaltsverzeichnis ────────────────────────────────────── -->
+  <nav class="toc">
+    <div class="toc-title">Inhaltsverzeichnis</div>
+    <div class="toc-grid">
+      <a href="#ueberblick">Überblick</a>
+      <a href="#gui">Benutzeroberfläche</a>
+      <a href="#rest">REST API</a>
+      <a href="#autodetect">Auto-Erkennung</a>
+      <a href="#threading">GUI-Threading</a>
+      <a href="#layout">Layout-Regeln</a>
+      <a href="#ablauf">Deployment-Ablauf</a>
+      <a href="#farben">Farbsystem</a>
+      <a href="#voraus">Systemvoraussetzungen</a>
+      <a href="#erweiterung">Erweiterung</a>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 1 – ÜBERBLICK
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="ueberblick">
+    <div class="section-badge">Abschnitt 1</div>
+    <h2 class="sec-title"><span class="sec-num">1</span>Überblick</h2>
+
+    <p>
+      Das <strong>SSRS Report Deployment Tool v3</strong> ist ein WinForms-basiertes
+      PowerShell-Skript für die standardisierte Verteilung von SSRS-Artefakten auf
+      SQL Server Reporting Services 2019, 2022 und 2025. Die Kommunikation erfolgt
+      ausschließlich über die <strong>REST API v2.0</strong>.
+    </p>
+
+    <h3 class="sub-title">Verarbeitungsregeln je Artefakttyp</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Dateityp</th>
+            <th>Erweiterung</th>
+            <th>Verhalten</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Report</td><td><code>.rdl</code></td><td>Wird immer überschrieben (PATCH wenn vorhanden, POST wenn neu)</td></tr>
+          <tr><td>Datenquelle</td><td><code>.rds&nbsp;/ .rsds</code></td><td>Bestehende Verbindung bleibt erhalten (SKIP); neue werden angelegt</td></tr>
+          <tr><td>Shared Dataset</td><td><code>.rsd</code></td><td>Wird immer überschrieben (PATCH wenn vorhanden, POST wenn neu)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num">3</div><div class="stat-label">Artefakttypen</div></div>
+      <div class="stat-card"><div class="stat-num">3</div><div class="stat-label">SSRS-Versionen<br>2019 / 2022 / 2025</div></div>
+      <div class="stat-card"><div class="stat-num">0</div><div class="stat-label">GUI-Freezes<br>(MethodInvoker)</div></div>
+      <div class="stat-card"><div class="stat-num">1</div><div class="stat-label">Datei<br>(.ps1)</div></div>
+    </div>
+
+    <h3 class="sub-title">Funktionsumfang</h3>
+    <ul class="doc-list">
+      <li>WinForms-GUI mit geteiltem Layout (TreeView | Dateiliste | Log)</li>
+      <li>Automatische Erkennung eines lokalen SSRS-Servers beim Start</li>
+      <li>Windows-Authentifizierung oder manuelle Credentials (DOMAIN\User + Passwort)</li>
+      <li>Rekursive Ordneranlage im Report Server per REST</li>
+      <li>Datei-Scan des Quellverzeichnisses mit Checkbox-Auswahl</li>
+      <li>Farbcodiertes Deployment-Log (RichTextBox) mit Export-Funktion</li>
+      <li>Thread-sicheres GUI-Update per MethodInvoker</li>
+      <li>Fortschrittsanzeige (ProgressBar) während des Deployments</li>
+    </ul>
+
+    <h3 class="sub-title">Architektur auf einen Blick</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Bereich</th><th>Funktion / Zweck</th></tr></thead>
+        <tbody>
+          <tr><td>REST-Hilfsfunktionen</td><td><code>Invoke-SSRSRequest</code>, <code>Get-SSRSApiBase</code>, <code>Test-SSRSConnection</code>, Ordner- und Item-Operationen</td></tr>
+          <tr><td>Deploy-Funktionen</td><td><code>Deploy-Report</code>, <code>Deploy-DataSource</code>, <code>Deploy-SharedDataset</code></td></tr>
+          <tr><td>Auto-Erkennung</td><td><code>Find-LocalSSRS</code> – prüft gängige URL-Varianten auf dem lokalen Rechner</td></tr>
+          <tr><td>GUI</td><td><code>Show-DeploymentTool</code> – WinForms, Events, Logging, Threading</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 2 – GUI
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="gui">
+    <div class="section-badge">Abschnitt 2</div>
+    <h2 class="sec-title"><span class="sec-num">2</span>Benutzeroberfläche</h2>
+
+    <p>
+      Die WinForms-GUI gliedert sich in drei Hauptbereiche. Alle Eingabefelder
+      werden beim Start initialisiert; der lokale SSRS-Server wird automatisch
+      gesucht und vorbelegt.
+    </p>
+
+    <!-- GUI-Mockup -->
+    <div class="gui-mockup">
+      <div class="gui-titlebar">
+        <span>SSRS Deployment Tool&ensp;v3.0</span>
+        <div class="gui-winctrls">
+          <span>–</span><span>□</span><span>✕</span>
+        </div>
+      </div>
+      <div style="padding:10px;background:#f0f2f5;">
+        <!-- Konfiguration -->
+        <div class="gui-grp" style="margin-bottom:8px;">
+          <div class="gui-grp-title">Konfiguration</div>
+          <div class="gui-row">
+            <span class="gui-label">Report Server URL:</span>
+            <span class="gui-input">http://SRV01/Reports</span>
+            <button class="gui-btn">Verbinden</button>
+          </div>
+          <div class="gui-row">
+            <span class="gui-label">Quellverzeichnis:</span>
+            <span class="gui-input">D:\SSRS\Reports\Produktion</span>
+            <button class="gui-btn">Durchsuchen</button>
+          </div>
+          <div class="gui-row">
+            <span class="gui-label">Zielordner (Server):</span>
+            <span class="gui-input" style="background:#eef4fc;">/Berichte/Produktion</span>
+            <span style="font-size:11px;color:#6e6ea0;padding-left:4px;">Im Baum links auswählen</span>
+          </div>
+          <div class="gui-row">
+            <span class="gui-label">Authentifizierung:</span>
+            <span style="font-size:11px;">☑ Manuelle Credentials verwenden</span>
+          </div>
+        </div>
+        <!-- Split: Tree + rechts -->
+        <div style="display:flex;gap:8px;min-height:160px;">
+          <!-- Tree -->
+          <div class="gui-grp" style="width:220px;flex-shrink:0;">
+            <div class="gui-grp-title">Serverordner</div>
+            <div style="font-size:11px;line-height:1.8;font-family:monospace;color:#333;">
+              📁 / (Wurzel)<br>
+              &nbsp;&nbsp;📁 Berichte<br>
+              &nbsp;&nbsp;&nbsp;&nbsp;📂 <strong>Produktion</strong><br>
+              &nbsp;&nbsp;&nbsp;&nbsp;📁 Archiv<br>
+              &nbsp;&nbsp;📁 Datasets<br>
+              &nbsp;&nbsp;📁 Datenquellen
+            </div>
+            <div style="font-size:10px;color:#6e6ea0;margin-top:6px;">6 Ordner</div>
+          </div>
+          <!-- Dateien + Log -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div class="gui-grp">
+              <div class="gui-grp-title">Gefundene Dateien</div>
+              <div style="font-size:11px;font-family:monospace;line-height:1.8;color:#333;">
+                <span style="color:#008040;">☑</span> MonatsReport.rdl&nbsp;&nbsp;&nbsp;Report&nbsp;&nbsp;42.3 KB<br>
+                <span style="color:#008040;">☑</span> JahresReport.rdl&nbsp;&nbsp;&nbsp;Report&nbsp;&nbsp;18.7 KB<br>
+                <span style="color:#008040;">☑</span> DS_Produktion.rds&nbsp;DSrc&nbsp;&nbsp;&nbsp;1.2 KB<br>
+                <span style="color:#6e6ea0;">☐</span> DS_Archiv.rds&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DSrc&nbsp;&nbsp;&nbsp;0.9 KB
+              </div>
+            </div>
+            <div class="gui-grp" style="flex:1;">
+              <div class="gui-grp-title">Deployment-Log</div>
+              <div class="gui-log">
+                <span class="log-hdr">[08:42:11] ──── SSRS Deployment Tool v3.0 bereit. ────</span><br>
+                <span class="log-info">[08:42:11] [INFO]    Benutzer: CONTOSO\adm.janke</span><br>
+                <span class="log-ok">[08:42:12] [OK]     Verbunden: Microsoft SQL Server Reporting Services 2022</span><br>
+                <span class="log-ok">[08:43:01] [OK]     MonatsReport.rdl → UPDATED</span><br>
+                <span class="log-ok">[08:43:02] [OK]     JahresReport.rdl → CREATED</span><br>
+                <span class="log-warn">[08:43:02] [SKIP]   DS_Produktion.rds → SKIPPED (bereits vorhanden)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Deploy-Leiste -->
+        <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+          <div style="flex:1;height:14px;background:#d0dae8;border-radius:3px;overflow:hidden;">
+            <div style="width:66%;height:100%;background:var(--c-accent);border-radius:3px;"></div>
+          </div>
+          <button style="padding:6px 18px;background:var(--c-header);color:#fff;border:none;border-radius:3px;font-size:12px;font-weight:700;">▶ Deployment starten</button>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sub-title">Konfigurationszeilen (0–4)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Zeile</th><th>Label</th><th>Control</th><th>Funktion</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>Report Server URL</td><td>TextBox + Button</td><td>URL des SSRS; Button löst Verbindungsaufbau aus</td></tr>
+          <tr><td>1</td><td>Quellverzeichnis</td><td>TextBox + Button</td><td>Lokaler Pfad mit .rdl/.rds/.rsd Dateien</td></tr>
+          <tr><td>2</td><td>Zielordner (Server)</td><td>TextBox (ReadOnly)</td><td>Wird durch Auswahl im TreeView gesetzt</td></tr>
+          <tr><td>3</td><td>Authentifizierung</td><td>CheckBox</td><td>Aktiviert manuelle Credentials</td></tr>
+          <tr><td>4</td><td>Benutzer / Kennwort</td><td>2 × TextBox</td><td>Nur aktiv wenn Zeile 3 angehakt; Passwort maskiert</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-title">ListView – Spalten</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Spalte</th><th>Breite</th><th>Inhalt</th></tr></thead>
+        <tbody>
+          <tr><td>Datei</td><td>220 px</td><td>Dateiname mit Erweiterung</td></tr>
+          <tr><td>Typ</td><td>64 px</td><td>Report / DSrc / Dataset</td></tr>
+          <tr><td>Größe</td><td>72 px</td><td>Dateigröße in KB</td></tr>
+          <tr><td>Geändert</td><td>148 px</td><td>Datum / Uhrzeit der letzten Änderung</td></tr>
+          <tr><td>Status</td><td>215 px</td><td>CREATED / UPDATED / SKIPPED / FEHLER nach Deployment</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 3 – REST API
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="rest">
+    <div class="section-badge">Abschnitt 3</div>
+    <h2 class="sec-title"><span class="sec-num">3</span>REST API Kommunikation</h2>
+
+    <h3 class="sub-title">3.1 API-Basis-URL (Get-SSRSApiBase)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Eingabe-URL</th><th>Normalisiert auf</th></tr></thead>
+        <tbody>
+          <tr><td><code>http://server/Reports</code></td><td><code>http://server/Reports/api/v2.0</code></td></tr>
+          <tr><td><code>http://server/ReportServer</code></td><td><code>http://server/Reports/api/v2.0</code></td></tr>
+          <tr><td><code>http://server/Reports/api/v2.0</code></td><td>unveränd</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-title">3.2 Invoke-SSRSRequest</h3>
+    <p>Zentrale REST-Hilfsfunktion für alle HTTP-Aufrufe. Unterstützt:</p>
+    <ul class="doc-list">
+      <li>GET, POST, PATCH-Methoden</li>
+      <li>Windows-Authentifizierung (<code>UseDefaultCredentials</code>) oder <code>PSCredential</code></li>
+      <li>Automatische JSON-Serialisierung (<code>ConvertTo-Json -Depth 10</code>)</li>
+      <li>Detailliertes Fehlerhandling: Response-Body, gesendeter Body und URI im Fehlertext</li>
+    </ul>
+
+    <h3 class="sub-title">3.3 Ordner-Operationen</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Funktion</th><th>Methode</th><th>Endpunkt</th><th>Verhalten</th></tr></thead>
+        <tbody>
+          <tr><td><code>Get-SSRSFolders</code></td><td>GET</td><td><code>/Folders?$orderby=Path</code></td><td>Alle Ordner sortiert nach Pfad</td></tr>
+          <tr><td><code>Get-SSRSFolderExists</code></td><td>GET</td><td><code>/Folders('&lt;path&gt;')</code></td><td>true/false – kein Fehler bei 404</td></tr>
+          <tr><td><code>New-SSRSFolderSingle</code></td><td>POST</td><td><code>/Folders</code></td><td>Legt Ordner an; HTTP 409 wird ignoriert</td></tr>
+          <tr><td><code>New-SSRSFolderRecursive</code></td><td>intern</td><td>rekursiv</td><td>Legt alle fehlenden Elternordner an</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-title">3.4 Deploy-Operationen</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Funktion</th><th>Neu (POST)</th><th>Vorhanden</th><th>Content Base64</th></tr></thead>
+        <tbody>
+          <tr><td><code>Deploy-Report</code></td><td><code>POST /Reports</code></td><td><code>PATCH /Reports('path')</code></td><td>Ja (.rdl)</td></tr>
+          <tr><td><code>Deploy-DataSource</code></td><td><code>POST /DataSources</code></td><td><strong>SKIP</strong> – keine Überschreibung</td><td>Nein (XML-Parsing)</td></tr>
+          <tr><td><code>Deploy-SharedDataset</code></td><td><code>POST /DataSets</code></td><td><code>PATCH /DataSets('path')</code></td><td>Ja (.rsd)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="infobox">
+      <strong>Besonderheit Datenquellen:</strong> Bestehende Datenquellen-Konfigurationen
+      (Connection String, Credentials) bleiben beim Deployment <strong>immer</strong> erhalten.
+      ConnectionString und Extension werden aus dem XML der .rds-Datei ausgelesen.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 4 – AUTO-ERKENNUNG
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="autodetect">
+    <div class="section-badge">Abschnitt 4</div>
+    <h2 class="sec-title"><span class="sec-num">4</span>Automatische Server-Erkennung</h2>
+
+    <p>
+      Beim Start prüft <code>Find-LocalSSRS</code> vier URL-Kandidaten in dieser
+      Reihenfolge. Die erste erreichbare URL wird im Eingabefeld vorbelegt.
+      Jeder Kandidat wird mit <code>TimeoutSec=4</code> und Windows-Auth gegen
+      <code>/api/v2.0/System</code> geprüft.
+    </p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>URL-Kandidat</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><code>http://&lt;COMPUTERNAME&gt;/Reports</code></td></tr>
+          <tr><td>2</td><td><code>http://&lt;COMPUTERNAME&gt;/ReportServer</code></td></tr>
+          <tr><td>3</td><td><code>http://localhost/Reports</code></td></tr>
+          <tr><td>4</td><td><code>http://localhost/ReportServer</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Die Funktion gibt <code>$null</code> zurück, wenn kein Server gefunden wurde.
+      In diesem Fall erscheint eine Warnung im Log und das Eingabefeld bleibt leer.
+    </p>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 5 – THREADING
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="threading">
+    <div class="section-badge">Abschnitt 5</div>
+    <h2 class="sec-title"><span class="sec-num">5</span>GUI-Threading</h2>
+
+    <p>
+      Lange REST-Operationen werden durch direkten Aufruf von
+      <code>Application.DoEvents()</code> im Deploy-Loop entkoppelt.
+      Alle GUI-Zugriffe folgen festen Sicherheitsregeln.
+    </p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Regel</th><th>Umsetzung</th></tr></thead>
+        <tbody>
+          <tr><td>GUI-Werte als Snapshot</td><td>Alle Control-Werte vor dem Loop lesen – nie im Loop direkt zugreifen</td></tr>
+          <tr><td>GUI-Updates per Invoke</td><td><code>$control.Invoke([MethodInvoker]{...})</code> – keine direkte Property-Zuweisung</td></tr>
+          <tr><td>DoEvents im Deploy-Loop</td><td><code>Application.DoEvents()</code> nach jedem Datei-Deployment</td></tr>
+          <tr><td>Buttons deaktivieren</td><td>Deploy, Scan, Verbinden werden gesperrt während des Deployments</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-title">Thread-sicheres Log-Schreiben</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        <span class="code-lang">PowerShell 5.1</span>
+      </div>
+      <pre><span class="kw">function</span> <span class="fn">Write-Log</span> {
+    <span class="kw">param</span>([<span class="var">string</span>]<span class="var">$Msg</span>, [<span class="var">string</span>]<span class="var">$Lv</span><span class="op">=</span><span class="str">'Info'</span>)
+    <span class="var">$col</span> <span class="op">=</span> <span class="kw">switch</span>(<span class="var">$Lv</span>) {
+        <span class="str">'Success'</span> { <span class="var">$cOk</span> }   <span class="str">'Warning'</span> { <span class="var">$cWarn</span> }
+        <span class="str">'Error'</span>   { <span class="var">$cErr</span> }  <span class="str">'Skip'</span>    { <span class="var">$cSkip</span> }
+        <span class="str">'Header'</span>  { <span class="var">$cAccent</span> }  <span class="kw">default</span>   { <span class="var">$cLogFg</span> }
+    }
+    <span class="var">$rtb</span>.SelectionColor <span class="op">=</span> <span class="var">$col</span>
+    <span class="var">$rtb</span>.AppendText(<span class="str">"[$(Get-Date -Format 'HH:mm:ss')] $Msg`n"</span>)
+    <span class="var">$rtb</span>.ScrollToCaret()
+}</pre>
+    </div>
+
+    <div class="warnbox">
+      <strong>Wichtig:</strong> In PowerShell 5.1 muss <code>[System.Windows.Forms.MethodInvoker]</code>
+      verwendet werden. <code>[System.Action]</code> wird als Cmdlet-Name interpretiert und führt zu
+      einem <code>CommandNotFoundException</code>.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 6 – LAYOUT-REGELN
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="layout">
+    <div class="section-badge">Abschnitt 6</div>
+    <h2 class="sec-title"><span class="sec-num">6</span>WinForms Layout-Regeln</h2>
+
+    <div class="infobox">
+      <strong>Diese Regeln sind im Quellcode dokumentiert und dürfen nicht geändert werden</strong>,
+      da sie auf PowerShell 5.1 / .NET 4.x Verhalten abgestimmt sind.
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Regel</th><th>Begründung</th></tr></thead>
+        <tbody>
+          <tr><td>Kein AutoSize auf GroupBox oder TLP mit Dock=Top</td><td>AutoSize ignoriert feste Höhen und zerstört das Layout</td></tr>
+          <tr><td>Träger-Panel mit fester Höhe für GroupBox</td><td>Stabile Höhe ohne dass Dock=Fill verdrängt wird</td></tr>
+          <tr><td>SplitterDistance ausschließlich in Form_Shown</td><td>Reale Pixel sind erst nach DoEvents() bekannt</td></tr>
+          <tr><td>Fill-Control zuerst zu Panel hinzufügen</td><td>Danach erst Top/Bottom – sonst wird Fill verdrängt</td></tr>
+          <tr><td>Deploy-Leiste (Bottom) vor splitV (Fill)</td><td>Reihenfolge ist zwingend für korrektes Docking</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 7 – DEPLOYMENT-ABLAUF
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="ablauf">
+    <div class="section-badge">Abschnitt 7</div>
+    <h2 class="sec-title"><span class="sec-num">7</span>Deployment-Ablauf</h2>
+
+    <h3 class="sub-title">7.1 Startsequenz</h3>
+    <ol class="doc-list">
+      <li>Form initialisieren, SplitterDistance setzen</li>
+      <li><code>Find-LocalSSRS</code>: lokalen Report Server suchen und URL vorbelegen</li>
+      <li>Hinweismeldungen im Log ausgeben (Benutzer, Workflow-Schritte 1–5)</li>
+    </ol>
+
+    <h3 class="sub-title">7.2 Verbindungsaufbau</h3>
+    <ol class="doc-list">
+      <li>URL normalisieren via <code>Get-SSRSApiBase</code></li>
+      <li>Optionale PSCredential aufbauen (bei manuellen Credentials)</li>
+      <li><code>Test-SSRSConnection</code>: GET /System – liefert ProductName und ProductVersion</li>
+      <li>Bei Erfolg: <code>Load-Tree</code> – Ordnerstruktur laden und TreeView aufbauen</li>
+      <li><code>Update-DeployBtn</code>: Deployment-Button freischalten wenn alle Voraussetzungen erfüllt</li>
+    </ol>
+
+    <h3 class="sub-title">7.3 Deployment-Schleife</h3>
+    <ol class="doc-list">
+      <li>Zielordner validieren und ggf. rekursiv anlegen (<code>New-SSRSFolderRecursive</code>)</li>
+      <li>Alle angehakten ListViewItems durchlaufen</li>
+      <li>Je nach Typ <code>Deploy-Report</code> / <code>Deploy-DataSource</code> / <code>Deploy-SharedDataset</code> aufrufen</li>
+      <li>Ergebnis (CREATED / UPDATED / SKIPPED / FEHLER) im ListView und Log ausgeben</li>
+      <li>ProgressBar erhöhen, <code>Application.DoEvents()</code> aufrufen</li>
+      <li>Abschlussmeldung mit Zähler OK / Übersprungen / Fehler ausgeben</li>
+      <li>Ordnerstruktur neu laden (<code>Load-Tree</code>) und Buttons reaktivieren</li>
+    </ol>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 8 – FARBSYSTEM
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="farben">
+    <div class="section-badge">Abschnitt 8</div>
+    <h2 class="sec-title"><span class="sec-num">8</span>Farbsystem &amp; Design</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Variable</th><th>Farbe</th><th>Verwendung</th></tr></thead>
+        <tbody>
+          <tr><td><code>$cBg</code></td><td><span class="color-dot" style="background:rgb(240,242,245)"></span>240, 242, 245</td><td>Fensterhintergrund</td></tr>
+          <tr><td><code>$cHeader</code></td><td><span class="color-dot" style="background:rgb(0,70,127)"></span>0, 70, 127</td><td>Titelleiste, GroupBox-Beschriftungen, Deploy-Button</td></tr>
+          <tr><td><code>$cAccent</code></td><td><span class="color-dot" style="background:rgb(0,114,198)"></span>0, 114, 198</td><td>Buttons, Log-Header, Spalten-Hervorhebungen</td></tr>
+          <tr><td><code>$cOk</code></td><td><span class="color-dot" style="background:rgb(0,140,70)"></span>0, 140, 70</td><td>Log: erfolgreiche Operationen, ListView OK</td></tr>
+          <tr><td><code>$cWarn</code></td><td><span class="color-dot" style="background:rgb(190,100,0)"></span>190, 100, 0</td><td>Log: Warnungen, Zusammenfassung bei SKIP</td></tr>
+          <tr><td><code>$cErr</code></td><td><span class="color-dot" style="background:rgb(180,30,30)"></span>180, 30, 30</td><td>Log: Fehler, ListView-Zeilen Fehler</td></tr>
+          <tr><td><code>$cSkip</code></td><td><span class="color-dot" style="background:rgb(110,110,160)"></span>110, 110, 160</td><td>Log: übersprungene Operationen</td></tr>
+          <tr><td><code>$cLogBg</code></td><td><span class="color-dot" style="background:rgb(18,20,28);border-color:#555"></span>18, 20, 28</td><td>RichTextBox-Hintergrund (dunkles Terminal)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 9 – SYSTEMVORAUSSETZUNGEN
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="voraus">
+    <div class="section-badge">Abschnitt 9</div>
+    <h2 class="sec-title"><span class="sec-num">9</span>Systemvoraussetzungen</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Komponente</th><th>Anforderung</th><th>Hinweis</th></tr></thead>
+        <tbody>
+          <tr><td>PowerShell</td><td>5.1 oder höher</td><td>WMF 5.1 auf Windows Server 2016+</td></tr>
+          <tr><td>Betriebssystem</td><td>Windows Server 2019 / 2022</td><td>WinForms benötigt .NET Framework</td></tr>
+          <tr><td>.NET Framework</td><td>4.7.2 oder höher</td><td>System.Windows.Forms, System.Drawing</td></tr>
+          <tr><td>SSRS</td><td>2019 / 2022 / 2025</td><td>REST API v2.0 muss aktiviert sein</td></tr>
+          <tr><td>Berechtigungen</td><td>Report-Publisher oder höher</td><td>Benötigt für POST/PATCH auf dem Report Server</td></tr>
+          <tr><td>Netzwerk</td><td>HTTP-Zugriff auf Report Server</td><td>Standard-Port 80</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-title">Ausführung</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        <span class="code-lang">PowerShell</span>
+      </div>
+      <pre><span class="fn">powershell.exe</span> <span class="var">-ExecutionPolicy</span> Bypass <span class="var">-File</span> <span class="str">".\SSRS_DeployTool_v3.ps1"</span></pre>
+    </div>
+
+    <h3 class="sub-title">Einschränkungen</h3>
+    <ul class="doc-list">
+      <li>Keine Unterstützung von SSRS-Subscriptions oder Berechtigungs-Deployments</li>
+      <li>Unterverzeichnisse im Quellpfad werden nicht rekursiv gescannt</li>
+      <li>Kerberos-Delegation (Double-Hop) nicht unterstützt – bei Remote-Servern manuelle Credentials verwenden</li>
+      <li>Schließen des Fensters während eines laufenden Deployments kann zu inkonsistenten Zuständen führen</li>
+    </ul>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABSCHNITT 10 – ERWEITERUNG
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="section" id="erweiterung">
+    <div class="section-badge">Abschnitt 10</div>
+    <h2 class="sec-title"><span class="sec-num">10</span>Erweiterungshinweise</h2>
+
+    <h3 class="sub-title">Neue Datenquellentypen</h3>
+    <p>
+      <code>Deploy-DataSource</code> liest <code>Extension</code> und <code>ConnectString</code>
+      aus dem .rds XML. Für ODBC- oder Oracle-Quellen muss der
+      <code>DataSourceType</code>-Wert entsprechend angepasst werden.
+    </p>
+
+    <h3 class="sub-title">Rekursiver Verzeichnis-Scan</h3>
+    <p>
+      Der aktuelle Scan-Button ruft <code>Get-ChildItem</code> ohne <code>-Recurse</code> auf.
+      Für rekursives Scanning genügt das Flag; der Zielordner im Report Server wird
+      analog zur Verzeichnisstruktur über <code>New-SSRSFolderRecursive</code> aufgebaut.
+    </p>
+
+    <h3 class="sub-title">HTTPS / Selbstsignierte Zertifikate</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        <span class="code-lang">PowerShell</span>
+      </div>
+      <pre><span class="cmt"># Vor dem ersten Invoke-RestMethod einfügen:</span>
+[System.Net.ServicePointManager]<span class="op">::</span>ServerCertificateValidationCallback <span class="op">=</span> { <span class="var">$true</span> }
+[System.Net.ServicePointManager]<span class="op">::</span>SecurityProtocol <span class="op">=</span> <span class="str">'Tls12'</span></pre>
+    </div>
+
+    <h3 class="sub-title">Persistentes Logging</h3>
+    <p>
+      <code>Write-Log</code> schreibt ausschließlich in die RichTextBox.
+      Für persistentes Logging genügt es, parallel per <code>Add-Content</code> in eine
+      Logdatei zu schreiben. Der <em>Log speichern</em>-Button exportiert den gesamten
+      RichTextBox-Inhalt als UTF-8-Textdatei.
+    </p>
+  </div>
+
+  <!-- ── Artikel-Footer ────────────────────────────────────────── -->
+  <div class="article-footer">
+    <div class="footer-tags">
+      <span class="tag">MS SQL Server</span>
+      <span class="tag">PowerShell Automation</span>
+      <span class="tag">SSRS</span>
+      <span class="tag">REST API</span>
+      <span class="tag">WinForms GUI</span>
+      <span class="tag">April 2025</span>
+    </div>
+    <div class="footer-meta">SSRS Deployment Tool v3.0 &nbsp;·&nbsp; REST API v2.0</div>
+  </div>
+
+</div><!-- /.content-wrap -->
+</body>
+</html>
