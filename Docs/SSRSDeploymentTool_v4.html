@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSRS Deployment Tool v4 - Power BI Report Server &amp; Migration</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --c-bg:        #f4f6f9;
+    --c-panel:     #ffffff;
+    --c-header:    #00467f;
+    --c-accent:    #0072c6;
+    --c-accent2:   #005a9e;
+    --c-ok:        #008040;
+    --c-warn:      #be6400;
+    --c-err:       #b41e1e;
+    --c-skip:      #6e6ea0;
+    --c-new:       #0a6640;
+    --c-new-bg:    #e6f4ee;
+    --c-logbg:     #12141c;
+    --c-logfg:     #c8d4e0;
+    --c-border:    #d8e0ea;
+    --c-text:      #1a1a2e;
+    --c-muted:     #5a6478;
+    --c-tag-bg:    #e8f0fa;
+    --c-tag-txt:   #0072c6;
+    --c-code-bg:   #1a1e2e;
+    --radius:      6px;
+    --shadow:      0 1px 4px rgba(0,70,127,.10);
+    --shadow-md:   0 2px 12px rgba(0,70,127,.13);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    background: var(--c-bg);
+    color: var(--c-text);
+  }
+
+  .content-wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px 24px 72px;
+  }
+
+  /* ── Hero-Banner ─────────────────────────────────────────────── */
+  .hero {
+    background: linear-gradient(135deg, #00467f 0%, #0072c6 60%, #1e90d8 100%);
+    border-radius: 10px;
+    padding: 36px 40px;
+    margin-bottom: 36px;
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(0,70,127,.22);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute; right: -40px; top: -40px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+  }
+  .hero-eyebrow {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .14em; color: rgba(255,255,255,.75); margin-bottom: 10px;
+  }
+  .hero h1 {
+    font-size: 32px; font-weight: 800; line-height: 1.15; margin-bottom: 12px;
+  }
+  .hero-sub {
+    font-size: 15px; color: rgba(255,255,255,.85); max-width: 640px; margin-bottom: 20px;
+  }
+  .hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .hero-pill {
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
+    border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 600;
+    color: #fff; white-space: nowrap;
+  }
+  .hero-pill.new {
+    background: rgba(255,255,255,.25); border-color: rgba(255,255,255,.6);
+  }
+
+  /* ── Artikel-Meta ─────────────────────────────────────────────── */
+  .article-meta {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 10px; margin-bottom: 12px;
+    font-size: 13px; color: var(--c-muted);
+  }
+  .article-meta .sep { color: var(--c-border); }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px;
+    background: var(--c-tag-bg); color: var(--c-tag-txt);
+    border-radius: 20px; font-size: 12px; font-weight: 600;
+    letter-spacing: .03em; text-transform: uppercase;
+  }
+  .tag.new { background: var(--c-new-bg); color: var(--c-new); }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+
+  /* ── Was ist neu Badge ──────────────────────────────────────────── */
+  .badge-new {
+    display: inline-block; background: var(--c-new-bg); color: var(--c-new);
+    border: 1px solid #a3d9bd; border-radius: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; padding: 1px 7px; vertical-align: middle;
+    margin-left: 6px;
+  }
+
+  /* ── TOC ──────────────────────────────────────────────────────── */
+  .toc {
+    background: var(--c-panel); border: 1px solid var(--c-border);
+    border-left: 4px solid var(--c-accent); border-radius: var(--radius);
+    padding: 18px 22px; margin-bottom: 40px; box-shadow: var(--shadow);
+  }
+  .toc-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--c-accent); margin-bottom: 12px;
+  }
+  .toc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 4px 24px;
+  }
+  .toc a { font-size: 13.5px; color: var(--c-accent); text-decoration: none; padding: 2px 0; display: block; }
+  .toc a:hover { text-decoration: underline; color: var(--c-header); }
+
+  /* ── Sections ─────────────────────────────────────────────────── */
+  .section { margin-bottom: 52px; }
+  .section-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .1em;
+    color: var(--c-muted); margin-bottom: 8px;
+  }
+  h2.sec-title {
+    font-size: 21px; font-weight: 700; color: var(--c-header);
+    padding-bottom: 8px; border-bottom: 2px solid var(--c-accent);
+    margin-bottom: 18px; display: flex; align-items: center; gap: 10px;
+  }
+  h2.sec-title .sec-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; background: var(--c-header); color: #fff;
+    border-radius: 50%; font-size: 13px; flex-shrink: 0;
+  }
+  h3.sub-title {
+    font-size: 15px; font-weight: 700; color: var(--c-accent);
+    margin: 22px 0 10px;
+  }
+  p { margin-bottom: 12px; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Version-Compare Cards ──────────────────────────────────── */
+  .version-compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0 24px;
+  }
+  .vc-card {
+    background: var(--c-panel); border: 1px solid var(--c-border);
+    border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .vc-card.v4 {
+    border-color: #a3d9bd; background: #f3fbf7;
+    box-shadow: 0 2px 10px rgba(0,128,64,.10);
+  }
+  .vc-label {
+    font-size: 11px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--c-muted); margin-bottom: 6px;
+  }
+  .vc-label.new { color: var(--c-new); }
+  .vc-title {
+    font-size: 18px; font-weight: 800; color: var(--c-header);
+    margin-bottom: 12px;
+  }
+  .vc-title.new { color: var(--c-new); }
+  .vc-list { list-style: none; padding: 0; }
+  .vc-list li {
+    font-size: 13.5px; padding: 4px 0 4px 22px; position: relative;
+    border-bottom: 1px solid var(--c-border); color: var(--c-text);
+  }
+  .vc-list li:last-child { border-bottom: none; }
+  .vc-list li::before { content: '✓'; position: absolute; left: 0; color: var(--c-ok); font-weight: 700; }
+  .vc-list li.new-item::before { content: '★'; color: var(--c-new); }
+
+  /* ── Infobox / Warnbox ──────────────────────────────────────── */
+  .infobox {
+    background: #edf4ff; border-left: 4px solid var(--c-accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px; margin: 16px 0; font-size: 14px;
+  }
+  .infobox strong { color: var(--c-header); }
+  .warnbox {
+    background: #fff8ed; border-left: 4px solid var(--c-warn);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px; margin: 16px 0; font-size: 14px;
+  }
+  .warnbox strong { color: var(--c-warn); }
+  .okbox {
+    background: var(--c-new-bg); border-left: 4px solid var(--c-ok);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 14px 18px; margin: 16px 0; font-size: 14px;
+  }
+  .okbox strong { color: var(--c-new); }
+
+  /* ── Tabellen ───────────────────────────────────────────────── */
+  .tbl-wrap {
+    overflow-x: auto; margin: 16px 0 22px;
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  table { width: 100%; border-collapse: collapse; background: var(--c-panel); font-size: 13.5px; }
+  thead tr { background: var(--c-header); }
+  thead th {
+    color: #fff; font-weight: 600; text-align: left;
+    padding: 10px 14px; white-space: nowrap;
+  }
+  tbody tr:nth-child(even) { background: #f7fafd; }
+  tbody tr:hover { background: #edf4ff; transition: background .15s; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--c-border); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td code, th code {
+    background: #e8f0fa; color: var(--c-accent2);
+    padding: 1px 5px; border-radius: 3px;
+    font-family: 'Courier New', monospace; font-size: 12px;
+  }
+  .td-ok   { color: var(--c-ok); font-weight: 700; }
+  .td-new  { color: var(--c-new); font-weight: 700; }
+  .td-warn { color: var(--c-warn); font-weight: 700; }
+  .td-skip { color: var(--c-skip); font-weight: 600; }
+
+  /* ── Code-Block ─────────────────────────────────────────────── */
+  .code-block {
+    background: var(--c-code-bg); border-radius: var(--radius);
+    overflow: hidden; margin: 14px 0 20px; box-shadow: var(--shadow-md);
+  }
+  .code-header {
+    background: #0e1020; padding: 7px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid #2a2e44;
+  }
+  .code-lang {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .1em; color: #6699cc; font-family: 'Courier New', monospace;
+  }
+  .code-dots { display: flex; gap: 5px; }
+  .code-dots span { width: 10px; height: 10px; border-radius: 50%; }
+  .code-dots span:nth-child(1) { background: #ff5f57; }
+  .code-dots span:nth-child(2) { background: #febc2e; }
+  .code-dots span:nth-child(3) { background: #28c840; }
+  .code-block pre {
+    padding: 16px 20px; overflow-x: auto;
+    font-family: 'Courier New', monospace; font-size: 13px;
+    line-height: 1.6; color: var(--c-logfg); white-space: pre;
+  }
+  .kw  { color: #c792ea; }
+  .fn  { color: #82aaff; }
+  .str { color: #c3e88d; }
+  .cmt { color: #546e7a; font-style: italic; }
+  .var { color: #f78c6c; }
+  .op  { color: #89ddff; }
+  .num { color: #f0c040; }
+
+  /* ── Step-Flow ───────────────────────────────────────────────── */
+  .flow-steps {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 0; margin: 18px 0 24px;
+  }
+  .flow-step {
+    background: var(--c-panel); border: 1px solid var(--c-border);
+    border-radius: var(--radius); padding: 12px 16px;
+    min-width: 130px; text-align: center; box-shadow: var(--shadow);
+    flex-shrink: 0;
+  }
+  .flow-step.src  { border-top: 3px solid var(--c-accent); }
+  .flow-step.mid  { border-top: 3px solid var(--c-warn); background: #fffbf4; }
+  .flow-step.dst  { border-top: 3px solid var(--c-ok); background: #f3fbf7; }
+  .flow-step-ico  { font-size: 22px; margin-bottom: 4px; }
+  .flow-step-lbl  { font-size: 12px; font-weight: 700; color: var(--c-header); }
+  .flow-step-sub  { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
+  .flow-arrow {
+    font-size: 20px; color: var(--c-muted); padding: 0 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── GUI-Mockup ──────────────────────────────────────────────── */
+  .gui-mockup {
+    background: #e8edf4; border: 1px solid #c0ccd8;
+    border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-md);
+    margin: 16px 0 24px; font-family: 'Segoe UI', sans-serif; font-size: 12px;
+  }
+  .gui-titlebar {
+    background: var(--c-header); color: #fff;
+    padding: 6px 12px; display: flex; align-items: center;
+    justify-content: space-between; font-size: 12px; font-weight: 600;
+  }
+  .gui-winctrls { display: flex; gap: 6px; }
+  .gui-winctrls span {
+    width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+    background: rgba(255,255,255,.3);
+  }
+  .gui-tabs {
+    display: flex; background: #d8e4f0;
+    border-bottom: 1px solid #b0c0d8;
+  }
+  .gui-tab {
+    padding: 5px 18px; font-size: 11px; font-weight: 600;
+    color: #5a6478; border-right: 1px solid #b0c0d8; cursor: default;
+  }
+  .gui-tab.active {
+    background: #e8edf4; color: var(--c-header);
+    border-bottom: 2px solid var(--c-accent); margin-bottom: -1px;
+  }
+  .gui-body { padding: 10px; background: #f0f2f5; }
+  .gui-grp {
+    background: #fff; border: 1px solid #c0ccd8;
+    border-radius: 4px; padding: 8px 10px; margin-bottom: 8px;
+  }
+  .gui-grp:last-child { margin-bottom: 0; }
+  .gui-grp-title {
+    font-size: 11px; font-weight: 700; color: var(--c-header);
+    border-bottom: 1px solid #d0dae6; margin-bottom: 6px; padding-bottom: 4px;
+  }
+  .gui-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .gui-row:last-child { margin-bottom: 0; }
+  .gui-label { font-size: 11px; color: #444; min-width: 100px; text-align: right; }
+  .gui-input {
+    flex: 1; background: #fff; border: 1px solid #b0c0d0;
+    border-radius: 2px; padding: 2px 6px; font-size: 11px; color: #333; min-width: 0;
+  }
+  .gui-btn {
+    padding: 2px 10px; background: var(--c-accent); color: #fff;
+    border: none; border-radius: 2px; font-size: 11px; cursor: default; white-space: nowrap;
+  }
+  .gui-btn.ok { background: var(--c-ok); }
+  .gui-btn-mig {
+    padding: 4px 16px; background: #0072c6; color: #fff;
+    border: none; border-radius: 3px; font-size: 12px; font-weight: 600; cursor: default;
+  }
+  .gui-lv {
+    background: #fff; border: 1px solid #b0c0d0; border-radius: 2px;
+    font-size: 11px; min-height: 80px; overflow-y: auto;
+  }
+  .gui-lv-row {
+    padding: 2px 8px; border-bottom: 1px solid #e8eef4;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .gui-lv-row:last-child { border-bottom: none; }
+  .gui-lv-row.hdr { background: #e0ecf8; font-weight: 700; color: var(--c-header); }
+  .lv-ok   { color: var(--c-ok); font-weight: 700; font-size: 10px; }
+  .lv-skip { color: var(--c-skip); font-size: 10px; }
+  .lv-new  { color: var(--c-new); font-size: 10px; }
+  .gui-log {
+    background: #12141c; color: #c8d4e0; font-family: 'Courier New', monospace;
+    font-size: 10.5px; padding: 8px; border-radius: 4px; margin-top: 6px; line-height: 1.6;
+  }
+  .log-ok   { color: #20c060; }
+  .log-info { color: #c8d4e0; }
+  .log-hdr  { color: #0072c6; }
+  .log-skip { color: #8888c0; }
+  .log-warn { color: #d0780a; }
+  .log-err  { color: #e05050; }
+  .gui-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .gui-tv {
+    background: #fff; border: 1px solid #b0c0d0; border-radius: 2px;
+    font-size: 11px; padding: 4px 6px; min-height: 100px;
+    font-family: 'Courier New', monospace;
+  }
+  .tv-root { color: var(--c-header); font-weight: 700; }
+  .tv-node { color: #333; padding-left: 14px; }
+  .tv-node.sel { background: #cce0f8; border-radius: 2px; }
+  .gui-dg {
+    background: #fff; border: 1px solid #b0c0d0; width: 100%;
+    border-collapse: collapse; font-size: 11px; margin-top: 4px;
+  }
+  .gui-dg th {
+    background: #e0ecf8; color: var(--c-header); padding: 3px 8px;
+    border-bottom: 1px solid #b0c0d0; font-weight: 700; text-align: left;
+  }
+  .gui-dg td {
+    padding: 2px 8px; border-bottom: 1px solid #e8eef4; color: #333;
+  }
+  .gui-dg tr:last-child td { border-bottom: none; }
+  .gui-pb {
+    background: #c8d8e8; border-radius: 4px; height: 14px;
+    overflow: hidden; margin-top: 6px;
+  }
+  .gui-pb-fill {
+    background: linear-gradient(90deg, #0072c6, #20a0e0);
+    height: 100%; border-radius: 4px; width: 55%;
+  }
+
+  /* ── Statistik-Kacheln ───────────────────────────────────────── */
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px; margin: 16px 0 28px;
+  }
+  .stat-card {
+    background: var(--c-panel); border: 1px solid var(--c-border);
+    border-radius: var(--radius); padding: 18px;
+    box-shadow: var(--shadow); border-top: 3px solid var(--c-accent);
+  }
+  .stat-card.new { border-top-color: var(--c-ok); }
+  .stat-num {
+    font-size: 30px; font-weight: 800; color: var(--c-header);
+    line-height: 1; margin-bottom: 4px;
+  }
+  .stat-num.new { color: var(--c-new); }
+  .stat-label {
+    font-size: 12px; color: var(--c-muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+
+  /* ── Liste ───────────────────────────────────────────────────── */
+  ul.doc-list, ol.doc-list { padding-left: 22px; margin: 8px 0 14px; }
+  ul.doc-list li, ol.doc-list li { margin-bottom: 6px; line-height: 1.55; }
+
+  /* ── Footer ──────────────────────────────────────────────────── */
+  .article-footer {
+    margin-top: 52px; padding-top: 20px; border-top: 1px solid var(--c-border);
+    display: flex; flex-wrap: wrap; align-items: center;
+    justify-content: space-between; gap: 12px;
+  }
+  .footer-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .footer-meta { font-size: 13px; color: var(--c-muted); }
+
+  /* ── Responsive ──────────────────────────────────────────────── */
+  @media (max-width: 680px) {
+    .content-wrap { padding: 20px 14px 52px; }
+    .hero { padding: 24px 20px; }
+    .hero h1 { font-size: 24px; }
+    .version-compare { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: repeat(2,1fr); }
+    .toc-grid { grid-template-columns: 1fr; }
+    .flow-steps { flex-direction: column; align-items: flex-start; }
+    .flow-arrow { transform: rotate(90deg); }
+    .gui-grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="content-wrap">
+
+  <!-- ── Hero ─────────────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="hero-eyebrow">PowerShell &middot; WinForms &middot; SSRS REST API v2.0</div>
+    <h1>SSRS Deployment Tool&ensp;v4</h1>
+    <p class="hero-sub">
+      Standardisiertes Deployment von SSRS-Reports per GUI und REST API.
+      Neu in v4: Power BI Report Server (.pbix), automatische PBIRS-Erkennung
+      und ein vollst&auml;ndiger Migrations-Workflow von SSRS zu PBIRS.
+    </p>
+    <div class="hero-pills">
+      <span class="hero-pill">PowerShell 5.1</span>
+      <span class="hero-pill">WinForms GUI</span>
+      <span class="hero-pill">SSRS REST API v2.0</span>
+      <span class="hero-pill">Windows Auth</span>
+      <span class="hero-pill new">&#9733; .pbix Deploy&ensp;NEU</span>
+      <span class="hero-pill new">&#9733; Migration SSRS &rarr; PBIRS&ensp;NEU</span>
+    </div>
+  </div>
+
+  <!-- ── Tags ─────────────────────────────────────────────────── -->
+  <div class="tag-row">
+    <span class="tag">PowerShell</span>
+    <span class="tag">SSRS</span>
+    <span class="tag">Power BI Report Server</span>
+    <span class="tag">REST API v2.0</span>
+    <span class="tag">WinForms</span>
+    <span class="tag new">v4.0 &ndash; Mai 2026</span>
+  </div>
+
+  <!-- ── TOC ──────────────────────────────────────────────────── -->
+  <nav class="toc">
+    <div class="toc-title">Inhaltsverzeichnis</div>
+    <div class="toc-grid">
+      <a href="#ueberblick">&#167;&ensp;&#220;berblick</a>
+      <a href="#versionen">&#167;&ensp;v3 vs. v4</a>
+      <a href="#dateiarten">&#167;&ensp;Datei-Typen</a>
+      <a href="#pbirs">&#167;&ensp;PBIRS-Erkennung &amp; .pbix</a>
+      <a href="#deploy-tab">&#167;&ensp;GUI: Deploy-Tab</a>
+      <a href="#migration-tab">&#167;&ensp;GUI: Migration-Tab</a>
+      <a href="#migration-ablauf">&#167;&ensp;Migrations-Workflow</a>
+      <a href="#ds-mapping">&#167;&ensp;Connection String Mapping</a>
+      <a href="#auth">&#167;&ensp;Authentifizierung</a>
+      <a href="#technik">&#167;&ensp;Technische Basis</a>
+      <a href="#voraus">&#167;&ensp;Systemvoraussetzungen</a>
+      <a href="#links">&#167;&ensp;Links &amp; Download</a>
+    </div>
+  </nav>
+
+  <!-- == 1. Überblick ============================================ -->
+  <section class="section" id="ueberblick">
+    <span class="section-badge">Abschnitt 01</span>
+    <h2 class="sec-title"><span class="sec-num">1</span>&#220;berblick</h2>
+
+    <p>
+      Das SSRS Deployment Tool automatisiert den Rollout von Report-Dateien auf SQL Server
+      Reporting Services (SSRS) und Power BI Report Server (PBIRS). Es ersetzt fehleranf&auml;llige
+      manuelle Uploads &uuml;ber den Report Manager durch einen standardisierten, protokollierten
+      Deployment-Prozess per WinForms-GUI.
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-num">4</div>
+        <div class="stat-label">Datei-Typen</div>
+      </div>
+      <div class="stat-card new">
+        <div class="stat-num new">2</div>
+        <div class="stat-label">Tabs (Deploy + Migration)</div>
+      </div>
+      <div class="stat-card new">
+        <div class="stat-num new">3</div>
+        <div class="stat-label">Neue Funktionen in v4</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">1.526</div>
+        <div class="stat-label">Zeilen PowerShell</div>
+      </div>
+    </div>
+
+    <p>
+      Das Tool kommuniziert direkt mit der SSRS REST API v2.0 &mdash; demselben Endpunkt,
+      den sowohl klassische SSRS-Server als auch PBIRS exponieren. F&uuml;r <code>.pbix</code>-Dateien
+      wird ein eigener Multipart-Upload-Endpunkt verwendet, der nur auf PBIRS-Instanzen
+      verf&uuml;gbar ist.
+    </p>
+
+    <div class="okbox">
+      <strong>Prinzip:</strong> Wird ausgebaut, nicht neu geschrieben &mdash; alle v3-Funktionen
+      (Deploy-Report, Deploy-DataSource, Deploy-SharedDataset, Folder-Browsing) bleiben unver&auml;ndert.
+      Neue Funktionalit&auml;t wird additiv hinzugef&uuml;gt.
+    </div>
+  </section>
+
+  <!-- == 2. v3 vs v4 ============================================= -->
+  <section class="section" id="versionen">
+    <span class="section-badge">Abschnitt 02</span>
+    <h2 class="sec-title"><span class="sec-num">2</span>v3.0.1 vs. v4.0</h2>
+
+    <div class="version-compare">
+      <div class="vc-card">
+        <div class="vc-label">Vorherige Version</div>
+        <div class="vc-title">v3.0.1</div>
+        <ul class="vc-list">
+          <li>Deploy von <code>.rdl</code>, <code>.rds</code>, <code>.rsds</code></li>
+          <li>Ordnerstruktur browsen und anlegen</li>
+          <li>Windows Auth + manuelle Credentials</li>
+          <li>Farbcodiertes Deployment-Log</li>
+          <li>SSRS REST API v2.0</li>
+          <li>1.012 Zeilen PowerShell</li>
+        </ul>
+      </div>
+      <div class="vc-card v4">
+        <div class="vc-label new">Aktuelle Version</div>
+        <div class="vc-title new">v4.0&ensp;<span class="badge-new">NEU</span></div>
+        <ul class="vc-list">
+          <li>Alle v3-Funktionen unver&auml;ndert</li>
+          <li class="new-item">Deploy von <code>.pbix</code> auf Power BI Report Server</li>
+          <li class="new-item">Automatische PBIRS-Erkennung (ProductName-Check)</li>
+          <li class="new-item">Migration-Tab: SSRS &rarr; PBIRS / SSRS &rarr; SSRS</li>
+          <li class="new-item">Export &uuml;ber lokales Zwischenverzeichnis</li>
+          <li class="new-item">Connection String Mapping (DataGridView)</li>
+          <li>1.526 Zeilen PowerShell</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Funktion</th>
+            <th>v3.0.1</th>
+            <th>v4.0</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Deploy <code>.rdl</code> / <code>.rds</code> / <code>.rsds</code></td><td class="td-ok">&#10003;</td><td class="td-ok">&#10003;</td></tr>
+          <tr><td>Deploy <code>.pbix</code> auf PBIRS</td><td class="td-skip">&#8212;</td><td class="td-new">&#9733; NEU</td></tr>
+          <tr><td>PBIRS-Erkennung (automatisch)</td><td class="td-skip">&#8212;</td><td class="td-new">&#9733; NEU</td></tr>
+          <tr><td>Migration-Tab (Export + Import)</td><td class="td-skip">&#8212;</td><td class="td-new">&#9733; NEU</td></tr>
+          <tr><td>Lokales Zwischenverzeichnis</td><td class="td-skip">&#8212;</td><td class="td-new">&#9733; NEU</td></tr>
+          <tr><td>Connection String Mapping</td><td class="td-skip">&#8212;</td><td class="td-new">&#9733; NEU</td></tr>
+          <tr><td>Ordnerstruktur browsen &amp; anlegen</td><td class="td-ok">&#10003;</td><td class="td-ok">&#10003;</td></tr>
+          <tr><td>Windows Auth + manuelle Credentials</td><td class="td-ok">&#10003;</td><td class="td-ok">&#10003;</td></tr>
+          <tr><td>Farbcodiertes Log (CREATED / UPDATED / SKIP / ERROR)</td><td class="td-ok">&#10003;</td><td class="td-ok">&#10003;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- == 3. Datei-Typen ========================================== -->
+  <section class="section" id="dateiarten">
+    <span class="section-badge">Abschnitt 03</span>
+    <h2 class="sec-title"><span class="sec-num">3</span>Unterst&uuml;tzte Datei-Typen</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Erweiterung</th>
+            <th>Typ</th>
+            <th>SSRS (klassisch)</th>
+            <th>Power BI Report Server</th>
+            <th>API-Endpunkt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>.rdl</code></td>
+            <td>Paginated Report</td>
+            <td class="td-ok">&#10003;</td>
+            <td class="td-ok">&#10003;</td>
+            <td><code>POST /Reports</code></td>
+          </tr>
+          <tr>
+            <td><code>.rds</code></td>
+            <td>Report Data Source</td>
+            <td class="td-ok">&#10003;</td>
+            <td class="td-ok">&#10003;</td>
+            <td><code>POST /DataSources</code></td>
+          </tr>
+          <tr>
+            <td><code>.rsds</code></td>
+            <td>Report Data Source (Shared)</td>
+            <td class="td-ok">&#10003;</td>
+            <td class="td-ok">&#10003;</td>
+            <td><code>POST /DataSources</code></td>
+          </tr>
+          <tr>
+            <td><code>.rsd</code></td>
+            <td>Shared Dataset</td>
+            <td class="td-ok">&#10003;</td>
+            <td class="td-ok">&#10003;</td>
+            <td><code>POST /DataSets</code></td>
+          </tr>
+          <tr style="background:#f3fbf7;">
+            <td><code>.pbix</code>&ensp;<span class="badge-new">NEU</span></td>
+            <td>Power BI Desktop Report</td>
+            <td class="td-skip">ausgegraut</td>
+            <td class="td-new">&#9733; aktiv</td>
+            <td><code>POST /PowerBIReports</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warnbox">
+      <strong>Hinweis:</strong> <code>.pbix</code>-Steuerelemente sind bei Verbindung zu einem
+      reinen SSRS-Server sichtbar, aber deaktiviert (ausgegraut). Es erscheint kein Fehler &mdash;
+      <code>.pbix</code>-Eintr&auml;ge werden mit Status <strong>SKIP</strong> protokolliert.
+      Sobald ein PBIRS erkannt wird, werden die Steuerelemente automatisch aktiviert.
+    </div>
+  </section>
+
+  <!-- == 4. PBIRS-Erkennung & .pbix ============================== -->
+  <section class="section" id="pbirs">
+    <span class="section-badge">Abschnitt 04</span>
+    <h2 class="sec-title"><span class="sec-num">4</span>PBIRS-Erkennung &amp; .pbix Deploy<span class="badge-new">NEU</span></h2>
+
+    <p>
+      Beim Verbinden mit einem Server ruft das Tool automatisch den System-Endpunkt ab
+      und pr&uuml;ft das Feld <code>ProductName</code>. Enth&auml;lt es &bdquo;Power BI&ldquo;, wird
+      der Server als PBIRS klassifiziert und das Tool schaltet .pbix-Support frei.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">REST &middot; PBIRS-Erkennung</span>
+        <div class="code-dots"><span></span><span></span><span></span></div>
+      </div>
+      <pre><span class="cmt"># Schritt 1: System-Info abrufen</span>
+<span class="fn">GET</span> <span class="str">/Reports/api/v2.0/System</span>
+
+<span class="cmt"># Antwort bei klassischem SSRS:</span>
+{ <span class="str">"ProductName"</span>: <span class="str">"Microsoft SQL Server Reporting Services"</span>, ... }
+
+<span class="cmt"># Antwort bei Power BI Report Server:</span>
+{ <span class="str">"ProductName"</span>: <span class="str">"Microsoft Power BI Report Server"</span>, ... }
+
+<span class="cmt"># Schritt 2: .pbix deployen (nur wenn PBIRS erkannt)</span>
+<span class="fn">POST</span> <span class="str">/Reports/api/v2.0/PowerBIReports</span>
+Content-Type: multipart/form-data
+Body: file=&lt;pbix-Binaerinhalt&gt;</pre>
+    </div>
+
+    <h3 class="sub-title">Implementierung in PowerShell 5.1</h3>
+    <p>
+      Der Multipart-Upload nutzt <code>System.Net.Http.HttpClient</code> und
+      <code>MultipartFormDataContent</code> &mdash; beide in PowerShell 5.1 &uuml;ber
+      <code>Add-Type -AssemblyName System.Net.Http</code> verf&uuml;gbar.
+      Synchroner Aufruf via <code>.GetAwaiter().GetResult()</code>.
+    </p>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-lang">PowerShell 5.1 &middot; Deploy-PowerBIReport (Kernlogik)</span>
+        <div class="code-dots"><span></span><span></span><span></span></div>
+      </div>
+      <pre><span class="kw">Add-Type</span> <span class="op">-AssemblyName</span> System.Net.Http
+
+<span class="var">$handler</span> = <span class="kw">New-Object</span> System.Net.Http.HttpClientHandler
+<span class="var">$handler</span>.UseDefaultCredentials = <span class="kw">$true</span>          <span class="cmt"># Windows Auth</span>
+<span class="var">$client</span>  = <span class="kw">New-Object</span> System.Net.Http.HttpClient(<span class="var">$handler</span>)
+
+<span class="var">$bytes</span> = [System.IO.File]::ReadAllBytes(<span class="var">$FilePath</span>)
+<span class="var">$mp</span>    = <span class="kw">New-Object</span> System.Net.Http.MultipartFormDataContent
+<span class="var">$fc</span>    = <span class="kw">New-Object</span> System.Net.Http.ByteArrayContent(,<span class="var">$bytes</span>)
+<span class="var">$fc</span>.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::<span class="fn">Parse</span>(<span class="str">'application/octet-stream'</span>)
+<span class="var">$mp</span>.<span class="fn">Add</span>(<span class="var">$fc</span>, <span class="str">'file'</span>, [System.IO.Path]::<span class="fn">GetFileName</span>(<span class="var">$FilePath</span>))
+
+<span class="var">$resp</span> = <span class="var">$client</span>.<span class="fn">PostAsync</span>(<span class="str">"<span class="var">$ApiBase</span>/PowerBIReports"</span>, <span class="var">$mp</span>).<span class="fn">GetAwaiter</span>().<span class="fn">GetResult</span>()</pre>
+    </div>
+
+    <div class="warnbox">
+      <strong>Fehler 403 (Lizenz):</strong> Wenn PBIRS ohne g&uuml;ltige Power BI-Lizenz betrieben
+      wird, antwortet der Server mit HTTP 403. Das Tool fängt diesen Fehler ab und zeigt eine
+      verst&auml;ndliche Meldung &mdash; kein roher Stack-Trace.
+    </div>
+  </section>
+
+  <!-- == 5. GUI: Deploy-Tab ====================================== -->
+  <section class="section" id="deploy-tab">
+    <span class="section-badge">Abschnitt 05</span>
+    <h2 class="sec-title"><span class="sec-num">5</span>GUI: Deploy-Tab</h2>
+
+    <p>
+      Der Deploy-Tab entspricht dem gewohnten v3-Workflow &mdash; er wurde nicht ver&auml;ndert,
+      lediglich um <code>.pbix</code>-Unterst&uuml;tzung erg&auml;nzt. Bestehende Benutzer finden
+      sich sofort zurecht.
+    </p>
+
+    <div class="gui-mockup">
+      <div class="gui-titlebar">
+        <span>SSRS Deployment Tool v4.0</span>
+        <div class="gui-winctrls"><span></span><span></span><span></span></div>
+      </div>
+      <div class="gui-tabs">
+        <div class="gui-tab active">&#128196;&ensp;Deploy</div>
+        <div class="gui-tab">&#8652;&ensp;Migration</div>
+      </div>
+      <div class="gui-body">
+        <div class="gui-grp">
+          <div class="gui-grp-title">Server-Verbindung</div>
+          <div class="gui-row">
+            <span class="gui-label">Report Server URL</span>
+            <span class="gui-input">http://pbirs-server/Reports</span>
+            <button class="gui-btn">Verbinden</button>
+          </div>
+          <div class="gui-row" style="margin-top:2px;font-size:10px;color:#20a060;padding-left:110px;">
+            &#10003;&ensp;Power BI Report Server erkannt &mdash; .pbix aktiv
+          </div>
+        </div>
+        <div class="gui-grp">
+          <div class="gui-grp-title">Lokale Dateien</div>
+          <div class="gui-lv">
+            <div class="gui-lv-row hdr">
+              <span style="flex:2">Dateiname</span>
+              <span style="flex:1">Typ</span>
+              <span style="flex:1">Status</span>
+            </div>
+            <div class="gui-lv-row">
+              <span style="flex:2">&#128196;&ensp;Finanzbericht_Q1.rdl</span>
+              <span style="flex:1">RDL Report</span>
+              <span style="flex:1" class="lv-ok">&#10003; UPDATED</span>
+            </div>
+            <div class="gui-lv-row">
+              <span style="flex:2">&#128196;&ensp;Controlling_Dashboard.pbix</span>
+              <span style="flex:1">Power BI</span>
+              <span style="flex:1" class="lv-new">&#9733; CREATED</span>
+            </div>
+            <div class="gui-lv-row">
+              <span style="flex:2">&#128196;&ensp;ds_Finanzen.rds</span>
+              <span style="flex:1">Data Source</span>
+              <span style="flex:1" class="lv-ok">&#10003; UPDATED</span>
+            </div>
+            <div class="gui-lv-row">
+              <span style="flex:2">&#128196;&ensp;SharedDataset_GL.rsd</span>
+              <span style="flex:1">Dataset</span>
+              <span style="flex:1" class="lv-ok">&#10003; CREATED</span>
+            </div>
+          </div>
+        </div>
+        <div class="gui-grp">
+          <div class="gui-row">
+            <span class="gui-label">Ziel-Ordner</span>
+            <span class="gui-input">/Finanzen/Controlling</span>
+            <button class="gui-btn">Browse</button>
+            <button class="gui-btn ok">Deployen</button>
+          </div>
+        </div>
+        <div class="gui-log">
+          <span class="log-hdr">[14:32:05] Verbunden mit http://pbirs-server/Reports (Power BI Report Server)</span><br>
+          <span class="log-ok">[14:32:11] UPDATED  Finanzbericht_Q1.rdl &rarr; /Finanzen/Controlling</span><br>
+          <span class="log-ok">[14:32:14] CREATED  Controlling_Dashboard.pbix &rarr; /Finanzen/Controlling</span><br>
+          <span class="log-ok">[14:32:15] UPDATED  ds_Finanzen.rds &rarr; /Finanzen/Controlling</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="infobox">
+      <strong>PBIRS-Erkennung:</strong> Das Tool pr&uuml;ft automatisch beim Verbinden den
+      Server-Typ. Bei reinem SSRS erscheinen <code>.pbix</code>-Eintr&auml;ge in der Liste
+      mit Status <strong>SKIP</strong> &mdash; kein Fehler, kein Abbruch.
+    </div>
+  </section>
+
+  <!-- == 6. GUI: Migration-Tab =================================== -->
+  <section class="section" id="migration-tab">
+    <span class="section-badge">Abschnitt 06</span>
+    <h2 class="sec-title"><span class="sec-num">6</span>GUI: Migration-Tab<span class="badge-new">NEU</span></h2>
+
+    <p>
+      Der neue Migration-Tab erm&ouml;glicht den vollst&auml;ndigen Transfer einer Ordnerstruktur
+      von einem Quell-Server auf einen Ziel-Server &mdash; inklusive RDL-Reports, Datenquellen
+      und Shared Datasets. Die Migration l&auml;uft immer &uuml;ber ein lokales Zwischenverzeichnis.
+    </p>
+
+    <div class="gui-mockup">
+      <div class="gui-titlebar">
+        <span>SSRS Deployment Tool v4.0</span>
+        <div class="gui-winctrls"><span></span><span></span><span></span></div>
+      </div>
+      <div class="gui-tabs">
+        <div class="gui-tab">&#128196;&ensp;Deploy</div>
+        <div class="gui-tab active">&#8652;&ensp;Migration</div>
+      </div>
+      <div class="gui-body">
+        <div class="gui-grid2">
+          <div class="gui-grp">
+            <div class="gui-grp-title">Quell-Server</div>
+            <div class="gui-row">
+              <span class="gui-label">URL</span>
+              <span class="gui-input">http://ssrs-alt/ReportServer</span>
+              <button class="gui-btn">Verbinden</button>
+            </div>
+            <div class="gui-tv" style="margin-top:6px;">
+              <div class="tv-root">&#128193; / (Wurzel)</div>
+              <div class="tv-node tv-sel">&#128193; /Finanzen</div>
+              <div class="tv-node" style="padding-left:28px;">&#128196; Jahresbericht.rdl</div>
+              <div class="tv-node" style="padding-left:28px;">&#128196; Controlling.rdl</div>
+              <div class="tv-node">&#128193; /Personal</div>
+              <div class="tv-node">&#128193; /IT</div>
+            </div>
+          </div>
+          <div class="gui-grp">
+            <div class="gui-grp-title">Ziel-Server (PBIRS)</div>
+            <div class="gui-row">
+              <span class="gui-label">URL</span>
+              <span class="gui-input">http://pbirs-neu/Reports</span>
+              <button class="gui-btn">Verbinden</button>
+            </div>
+            <div class="gui-tv" style="margin-top:6px;">
+              <div class="tv-root">&#128193; / (Wurzel)</div>
+              <div class="tv-node tv-sel">&#128193; /Berichte</div>
+              <div class="tv-node">&#128193; /Archiv</div>
+            </div>
+          </div>
+        </div>
+        <div class="gui-grp">
+          <div class="gui-grp-title">Migrations-Optionen</div>
+          <div class="gui-row">
+            <span class="gui-label">Exportpfad</span>
+            <span class="gui-input">C:\Migration\2026-05-21_Export</span>
+            <button class="gui-btn">...</button>
+          </div>
+          <div style="margin:6px 0 4px;font-size:11px;color:#333;">
+            <label><input type="checkbox" checked disabled style="margin-right:4px;">Connection Strings anpassen (DataGridView)</label>
+          </div>
+          <table class="gui-dg">
+            <thead><tr><th>Suchen</th><th>Ersetzen durch</th></tr></thead>
+            <tbody>
+              <tr><td>ssqlprod17\INST01</td><td>pbirs-neu\INST01</td></tr>
+              <tr><td>Data Source=DEV02</td><td>Data Source=PROD-PBIRS</td></tr>
+              <tr><td style="color:#aaa;font-style:italic;">(neue Zeile ...)</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="gui-grp">
+          <div class="gui-row" style="justify-content:space-between;">
+            <button class="gui-btn-mig">&#8652;&ensp;Migrieren &rarr;</button>
+            <span style="font-size:11px;color:#5a6478;">12 von 34 Dateien verarbeitet</span>
+          </div>
+          <div class="gui-pb" style="margin-top:6px;"><div class="gui-pb-fill"></div></div>
+        </div>
+        <div class="gui-log">
+          <span class="log-hdr">[15:10:02] Export gestartet: /Finanzen &rarr; C:\Migration\2026-05-21_Export</span><br>
+          <span class="log-ok">[15:10:03] EXPORT  Jahresbericht.rdl (14.2 KB)</span><br>
+          <span class="log-ok">[15:10:03] EXPORT  Controlling.rdl (8.7 KB)</span><br>
+          <span class="log-ok">[15:10:04] EXPORT  ds_Finanzen.rds (Connection String angepasst)</span><br>
+          <span class="log-hdr">[15:10:05] Deploy gestartet &rarr; http://pbirs-neu/Reports /Berichte</span><br>
+          <span class="log-ok">[15:10:06] CREATED  Jahresbericht.rdl &rarr; /Berichte</span><br>
+          <span class="log-ok">[15:10:07] CREATED  Controlling.rdl &rarr; /Berichte</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- == 7. Migrations-Workflow ================================== -->
+  <section class="section" id="migration-ablauf">
+    <span class="section-badge">Abschnitt 07</span>
+    <h2 class="sec-title"><span class="sec-num">7</span>Migrations-Workflow</h2>
+
+    <div class="flow-steps">
+      <div class="flow-step src">
+        <div class="flow-step-ico">&#128190;</div>
+        <div class="flow-step-lbl">Quell-Server</div>
+        <div class="flow-step-sub">SSRS (alt)</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step src">
+        <div class="flow-step-ico">&#9660;</div>
+        <div class="flow-step-lbl">Export-SSRSContent</div>
+        <div class="flow-step-sub">RDL / RDS / RSD</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step mid">
+        <div class="flow-step-ico">&#128193;</div>
+        <div class="flow-step-lbl">Lokales Verzeichnis</div>
+        <div class="flow-step-sub">pr&uuml;fen / Rollback</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step dst">
+        <div class="flow-step-ico">&#9650;</div>
+        <div class="flow-step-lbl">Deploy-Report</div>
+        <div class="flow-step-sub">CREATED / UPDATED</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step dst">
+        <div class="flow-step-ico">&#9989;</div>
+        <div class="flow-step-lbl">Ziel-Server</div>
+        <div class="flow-step-sub">PBIRS (neu)</div>
+      </div>
+    </div>
+
+    <h3 class="sub-title">Schritt-f&uuml;r-Schritt</h3>
+    <ol class="doc-list">
+      <li><strong>Verbinden</strong> &mdash; Quell-Server und Ziel-Server getrennt verbinden (Windows Auth oder manuelle Credentials)</li>
+      <li><strong>Ordnerstruktur laden</strong> &mdash; TreeViews (links: Quelle, rechts: Ziel) werden bef&uuml;llt</li>
+      <li><strong>Exportpfad w&auml;hlen</strong> &mdash; lokales Verzeichnis f&uuml;r das Zwischenergebnis</li>
+      <li><strong>Connection String Mapping konfigurieren</strong> (optional) &mdash; beliebig viele Suchen/Ersetzen-Regeln im DataGridView</li>
+      <li><strong>Migrieren</strong> &mdash; das Tool exportiert alle Reports, Datenquellen und Datasets vom Quell-Server ins lokale Verzeichnis</li>
+      <li><strong>Zwischenverzeichnis pr&uuml;fen</strong> (optional) &mdash; Dateien k&ouml;nnen vor dem Deploy inspiziert, ge&auml;ndert oder bei Bedarf manuell korrigiert werden</li>
+      <li><strong>Deploy</strong> &mdash; alle exportierten Dateien werden auf den Ziel-Server deployed; Ordnerstruktur wird automatisch angelegt</li>
+      <li><strong>Log-Auswertung</strong> &mdash; jede Datei wird mit Status CREATED / UPDATED / ERROR protokolliert</li>
+    </ol>
+
+    <h3 class="sub-title">Was exportiert wird</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Typ</th><th>Quelle</th><th>Export-Methode</th><th>Datei</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>RDL Report</td><td>SSRS Katalog</td><td><code>GET /Reports({Id})/Content/$value</code></td><td><code>.rdl</code> (bin&auml;r)</td></tr>
+          <tr><td>Report Data Source</td><td>API JSON</td><td><code>GET /DataSources({Id})</code> &rarr; XML rekonstruiert</td><td><code>.rds</code></td></tr>
+          <tr><td>Shared Dataset</td><td>SSRS Katalog</td><td><code>GET /DataSets({Id})/Content/$value</code></td><td><code>.rsd</code> (bin&auml;r)</td></tr>
+          <tr><td>Ordnerstruktur</td><td>API JSON</td><td><code>GET /Folders</code></td><td>lokal angelegt</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="okbox">
+      <strong>Warum Zwischenverzeichnis?</strong> Kein direkter Server-zu-Server-Transfer &mdash;
+      alle exportierten Dateien liegen zuerst lokal. Das erm&ouml;glicht Inspektion, manuelle
+      Korrekturen und bei Bedarf einen vollst&auml;ndigen Rollback ohne Datenverlust.
+    </div>
+  </section>
+
+  <!-- == 8. Connection String Mapping ============================ -->
+  <section class="section" id="ds-mapping">
+    <span class="section-badge">Abschnitt 08</span>
+    <h2 class="sec-title"><span class="sec-num">8</span>Connection String Mapping<span class="badge-new">NEU</span></h2>
+
+    <p>
+      Quell- und Ziel-Server haben in aller Regel unterschiedliche Datenbank-Server-Namen.
+      Das Connection String Mapping l&ouml;st dieses Problem: im DataGridView werden beliebig viele
+      Suchen/Ersetzen-Regeln definiert, die w&auml;hrend des Exports auf alle
+      <code>.rds</code>-Datenquellen-Dateien angewendet werden.
+    </p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Suchen (Regex)</th><th>Ersetzen durch</th><th>Anwendung</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><code>ssqlprod17\\INST01</code></td><td><code>pbirs-server\INST01</code></td><td>Server-Rename</td></tr>
+          <tr><td>2</td><td><code>Data Source=DEV02</code></td><td><code>Data Source=PROD-PBIRS</code></td><td>Dev &rarr; Prod</td></tr>
+          <tr><td>3</td><td><code>Initial Catalog=ReportDB_Alt</code></td><td><code>Initial Catalog=ReportDB</code></td><td>DB-Rename</td></tr>
+          <tr><td>&#8230;</td><td colspan="3" style="color:#aaa;font-style:italic;">beliebig viele weitere Regeln m&ouml;glich</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="infobox">
+      <strong>Optional:</strong> Connection String Mapping ist nicht zwingend erforderlich.
+      Ohne aktivierte Regeln werden die Original-Connection-Strings vom Quell-Server 1:1 &uuml;bernommen.
+      Die Checkbox im Migration-Tab aktiviert / deaktiviert das Mapping.
+    </div>
+
+    <p>
+      Die Regeln werden als PowerShell-Hashtable aufgebaut und per <code>-replace</code>-Operator
+      sequentiell auf den Connection-String-Text jeder Datenquelle angewendet.
+      Regex-Syntax ist unterst&uuml;tzt.
+    </p>
+  </section>
+
+  <!-- == 9. Authentifizierung ==================================== -->
+  <section class="section" id="auth">
+    <span class="section-badge">Abschnitt 09</span>
+    <h2 class="sec-title"><span class="sec-num">9</span>Authentifizierung</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Methode</th><th>Konfiguration</th><th>Einsatz</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Windows Auth</strong> (Standard)</td>
+            <td>Kein Aufwand &mdash; Anmeldung des aktuellen Windows-Benutzers</td>
+            <td>On-Premise SSRS / PBIRS in Windows-Dom&auml;ne</td>
+          </tr>
+          <tr>
+            <td><strong>Manuelle Credentials</strong></td>
+            <td>Benutzername + Passwort in der GUI eingeben</td>
+            <td>Cross-Domain, Service-Accounts, Testumgebungen</td>
+          </tr>
+          <tr>
+            <td><strong>OAuth / AAD</strong></td>
+            <td>Zur&uuml;ckgestellt &mdash; ~50 Zeilen + App-Registrierung im AD</td>
+            <td>Erst relevant bei PBIRS mit Azure AD</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warnbox">
+      <strong>OAuth / AAD:</strong> Bewusst zur&uuml;ckgestellt. Der Aufwand ist &uuml;berschaubar
+      (App-Registrierung + ~50 Zeilen Code), aber f&uuml;r On-Premise-Umgebungen mit Windows-Domain
+      nicht n&ouml;tig. Kann bei Bedarf nachger&uuml;stet werden.
+    </div>
+  </section>
+
+  <!-- == 10. Technische Basis ==================================== -->
+  <section class="section" id="technik">
+    <span class="section-badge">Abschnitt 10</span>
+    <h2 class="sec-title"><span class="sec-num">10</span>Technische Basis</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Komponente</th><th>Technologie</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>GUI</td><td>WinForms</td><td>TabControl, TreeView, ListView, DataGridView, RichTextBox</td></tr>
+          <tr><td>REST-Client (Standard)</td><td><code>Invoke-WebRequest</code></td><td>JSON-Requests, Bin&auml;r-Downloads (-OutFile)</td></tr>
+          <tr><td>REST-Client (.pbix)</td><td><code>System.Net.Http.HttpClient</code></td><td>MultipartFormDataContent, async via GetAwaiter()</td></tr>
+          <tr><td>API</td><td>SSRS / PBIRS REST API v2.0</td><td>Identischer Endpunkt f&uuml;r beide Server-Typen</td></tr>
+          <tr><td>Authentifizierung</td><td>DefaultCredentials / NetworkCredential</td><td>Windows Auth oder manuelle Credentials</td></tr>
+          <tr><td>PowerShell-Version</td><td>PowerShell 5.1</td><td>Keine externen Module erforderlich</td></tr>
+          <tr><td>GUI-Threading</td><td>BackgroundWorker</td><td>Kein UI-Freeze w&auml;hrend Deploy / Export</td></tr>
+          <tr><td>Bin&auml;r-Download</td><td><code>Invoke-WebRequest -OutFile</code></td><td>Korrekte Bin&auml;r&uuml;bertragung ohne Encoding-Fehler</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-title">Architektur-Prinzip</h3>
+    <p>
+      Alle v3-Funktionen (<code>Invoke-SSRSRequest</code>, <code>Deploy-Report</code>,
+      <code>Deploy-DataSource</code>, <code>Deploy-SharedDataset</code>,
+      <code>New-SSRSFolderRecursive</code> u. a.) bleiben unver&auml;ndert.
+      Die v4-Neuerungen werden als additive Funktionen und GUI-Erweiterung eingebracht:
+    </p>
+    <ul class="doc-list">
+      <li><code>Get-SSRSBinaryContent</code> &mdash; Bin&auml;r-Download beliebiger Katalog-Items</li>
+      <li><code>Deploy-PowerBIReport</code> &mdash; Multipart-Upload f&uuml;r <code>.pbix</code></li>
+      <li><code>Export-SSRSContent</code> &mdash; vollst&auml;ndiger Folder-Export inkl. DS-Mapping</li>
+    </ul>
+  </section>
+
+  <!-- == 11. Systemvoraussetzungen =============================== -->
+  <section class="section" id="voraus">
+    <span class="section-badge">Abschnitt 11</span>
+    <h2 class="sec-title"><span class="sec-num">11</span>Systemvoraussetzungen</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Anforderung</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>PowerShell</td><td>5.1 (Windows PowerShell, keine Core-Abh&auml;ngigkeit)</td></tr>
+          <tr><td>Betriebssystem</td><td>Windows &mdash; WinForms setzt .NET Framework voraus</td></tr>
+          <tr><td>Ziel-Server</td><td>SSRS 2016+ oder Power BI Report Server (beliebige Version)</td></tr>
+          <tr><td>Authentifizierung</td><td>Windows-Dom&auml;nen-Account mit Report-Manager-Rechten</td></tr>
+          <tr><td>Netzwerk</td><td>HTTP/HTTPS-Zugriff auf den Report-Server (Port 80 oder 443)</td></tr>
+          <tr><td>Externe Module</td><td>Keine &mdash; reines PowerShell 5.1 + .NET Framework</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- == 12. Links & Download ==================================== -->
+  <section class="section" id="links">
+    <span class="section-badge">Abschnitt 12</span>
+    <h2 class="sec-title"><span class="sec-num">12</span>Links &amp; Download</h2>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Ressource</th><th>URL / Pfad</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GitHub Repository</td>
+            <td><a href="https://github.com/JankeUwe/SSRSDeploymentTool" style="color:var(--c-accent);">github.com/JankeUwe/SSRSDeploymentTool</a></td>
+          </tr>
+          <tr>
+            <td>Quellcode (lokal)</td>
+            <td><code>C:\CCM\ReportDepolyment\ReportDeplyment\ReportDeplyment.ps1</code></td>
+          </tr>
+          <tr>
+            <td>Dokumentation v3 (Referenz)</td>
+            <td><code>SSRS_Deployment_Tool_v3.html</code></td>
+          </tr>
+          <tr>
+            <td>Lizenz</td>
+            <td>MIT &mdash; <code>LICENSE</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="okbox">
+      <strong>Version 4.0 ist auf GitHub verf&uuml;gbar</strong> (commit 6200add).
+      Kein separates Setup erforderlich &mdash; das Tool ist ein einzelnes
+      <code>.ps1</code>-Script das direkt ausgef&uuml;hrt wird.
+    </div>
+  </section>
+
+  <!-- ── Footer ──────────────────────────────────────────────── -->
+  <div class="article-footer">
+    <div class="footer-tags">
+      <span class="tag">PowerShell 5.1</span>
+      <span class="tag">SSRS REST API v2.0</span>
+      <span class="tag">Power BI Report Server</span>
+      <span class="tag">WinForms</span>
+      <span class="tag new">v4.0 &ndash; Mai 2026</span>
+    </div>
+    <div class="footer-meta">
+      Uwe Janke &middot; Senior IT-Spezialist &middot; SQL Server &amp; PowerShell Automation
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
