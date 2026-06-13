@@ -595,7 +595,7 @@ function Show-DeploymentTool {
     $splitH.BorderStyle   = 'None'
     $splitH.BackColor     = $cBg
     $splitH.Panel1MinSize = 160
-    $splitH.Panel2MinSize = 160
+    # $splitH.Panel2MinSize = 160   # Fixed: Initialize later in Form_Shown
     $pnlD.Controls.Add($splitH)
 
     $sep        = New-Object System.Windows.Forms.Panel
@@ -699,7 +699,7 @@ function Show-DeploymentTool {
     $splitV.BorderStyle   = 'None'
     $splitV.BackColor     = $cBg
     $splitV.Panel1MinSize = 80
-    $splitV.Panel2MinSize = 80
+    # $splitV.Panel2MinSize = 80   # Fixed: Initialize later in Form_Shown
     $splitH.Panel2.Controls.Add($splitV)
 
     # splitV.Panel1: Dateiliste
@@ -779,7 +779,7 @@ function Show-DeploymentTool {
     $splitMig.BorderStyle   = 'None'
     $splitMig.BackColor     = $cBg
     $splitMig.Panel1MinSize = 160
-    $splitMig.Panel2MinSize = 160
+    # $splitMig.Panel2MinSize = 160   # Fixed: Initialize later in Form_Shown
     $pnlM.Controls.Add($splitMig)
 
     # --- pnlMigBot (Dock=Bottom, h=230) ---
