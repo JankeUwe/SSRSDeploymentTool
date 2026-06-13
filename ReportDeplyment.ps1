@@ -187,6 +187,7 @@ function Deploy-Report {
     $ipath    = "$TargetFolder/$name"
     $rawBytes = [System.IO.File]::ReadAllBytes($FilePath)
     $bytes    = Repair-RDLContent -RawBytes $rawBytes
+    # $bytes    = $rawBytes  # RDL direkt ohne Repair
     $content  = [Convert]::ToBase64String($bytes)
     $existing = Get-SSRSItemExists -ApiBase $ApiBase -ItemPath $ipath -Credential $Credential
     if ($existing) {
@@ -402,10 +403,40 @@ function Find-LocalSSRS {
 }
 
 # =============================================================================
+# Strings / Localization
+# =============================================================================
+$script:CurrentLanguage = 'en'  # Default: 'en'. User can toggle to 'de' with button
+$script:Strings = @{}
+
+function Load-Strings {
+    param([string]$Language)
+    $strPath = Join-Path (Split-Path -Parent $PSCommandPath) "Strings\$Language.ps1"
+    if (-not (Test-Path $strPath)) {
+        Write-Error "String file not found: $strPath"
+        return
+    }
+    $script:Strings = & $strPath
+    $script:CurrentLanguage = $Language
+}
+
+function Get-String {
+    param([string]$Key, [string]$Default = $Key)
+    if ($script:Strings.ContainsKey($Key)) {
+        return $script:Strings[$Key]
+    } else {
+        return $Default
+    }
+}
+
+
+# =============================================================================
 # GUI
 # =============================================================================
 
 function Show-DeploymentTool {
+
+    # Load language strings (default: German)
+    Load-Strings -Language $script:CurrentLanguage
 
     # -------------------------------------------------------------------------
     # Design
@@ -466,6 +497,76 @@ function Show-DeploymentTool {
     $lblTitle.Dock      = 'Fill'
     $lblTitle.TextAlign = 'MiddleLeft'
 
+    $btnLang            = New-Object System.Windows.Forms.Button
+    $btnLang.Text       = $script:CurrentLanguage.ToUpper()
+    $btnLang.ForeColor  = [System.Drawing.Color]::White
+    $btnLang.BackColor  = [System.Drawing.Color]::FromArgb(0, 50, 100)
+    $btnLang.Font       = $fSmall
+    $btnLang.Dock       = 'Right'
+    $btnLang.Width      = 42
+    $btnLang.FlatStyle  = 'Flat'
+    $btnLang.FlatAppearance.BorderSize = 0
+    $btnLang.Cursor     = 'Hand'
+    # Store update block for language switching
+    $script:LanguageUpdateBlock = {
+        # Header & Title
+        $lblTitle.Text = Get-String 'AppTitle'
+        $lblVer.Text   = Get-String 'AppVersion'
+
+        # Config group
+        $grpCfg.Text   = Get-String 'CfgGroup'
+        $lblSrc.Text   = Get-String 'SourceFolderPath'
+        $lblTgt.Text   = Get-String 'TargetFolder'
+        $lblHint.Text  = Get-String 'HintTree'
+        $chkCrd.Text   = Get-String 'ManualCreds'
+        $lU.Text       = Get-String 'User'
+        $lP.Text       = Get-String 'Password'
+        $btnConn.Text  = Get-String 'ConnectButton'
+        $btnBrw.Text   = Get-String 'BrowseButton'
+
+        # Tree/Deploy
+        $grpTree.Text      = Get-String 'TreeGroup'
+        $lblTreeStat.Text  = Get-String 'TreeStatus'
+        $btnDeploy.Text    = Get-String 'DeployButton'
+
+        # Files
+        $grpFiles.Text     = Get-String 'FilesGroup'
+        $btnScan.Text      = Get-String 'ScanButton'
+        $btnAll.Text       = Get-String 'AllButton'
+        $btnNone.Text      = Get-String 'NoneButton'
+        $lblFCnt.Text      = Get-String 'FileCountLabel'
+
+        # Log
+        $grpLog.Text       = Get-String 'LogGroup'
+        $btnClrLog.Text    = Get-String 'ClearLogButton'
+        $btnSavLog.Text    = Get-String 'SaveLogButton'
+
+        # ListView columns
+        if ($clv.Columns.Count -gt 0) { $clv.Columns[0].Text = Get-String 'ColFile' 'Datei' }
+        if ($clv.Columns.Count -gt 1) { $clv.Columns[1].Text = Get-String 'ColType' 'Typ' }
+        if ($clv.Columns.Count -gt 2) { $clv.Columns[2].Text = Get-String 'ColSize' 'Groesse' }
+        if ($clv.Columns.Count -gt 3) { $clv.Columns[3].Text = Get-String 'ColModified' 'Geaendert' }
+
+        # Migration Tab (if visible)
+        if ($null -ne (Get-Variable btnMig -ErrorAction SilentlyContinue)) {
+            $btnMig.Text        = Get-String 'MigrateButton'
+            $grpMigLog.Text     = Get-String 'MigLogGroup'
+            $btnMigClrLog.Text  = Get-String 'MigClearButton'
+            $btnMigSavLog.Text  = Get-String 'MigSaveButton'
+            $grpSrcTree.Text    = Get-String 'SourceServer'
+            $grpTgtTree.Text    = Get-String 'TargetFolder'
+        }
+
+        $form.Invalidate()
+    }
+
+    $btnLang.Add_Click({
+        $newLang = if ($script:CurrentLanguage -eq 'de') { 'en' } else { 'de' }
+        Load-Strings -Language $newLang
+        $btnLang.Text = $script:CurrentLanguage.ToUpper()
+        & $script:LanguageUpdateBlock
+    })
+
     $lblVer             = New-Object System.Windows.Forms.Label
     $lblVer.Text        = '2026 v4.0  |  REST API v2.0'
     $lblVer.ForeColor   = [System.Drawing.Color]::FromArgb(170, 205, 240)
@@ -474,7 +575,7 @@ function Show-DeploymentTool {
     $lblVer.Width       = 170
     $lblVer.TextAlign   = 'MiddleRight'
 
-    $pnlHeader.Controls.AddRange(@($lblTitle, $lblVer))
+    $pnlHeader.Controls.AddRange(@($lblTitle, $btnLang, $lblVer))
     $form.Controls.Add($pnlHeader)
 
     # -------------------------------------------------------------------------
@@ -507,7 +608,7 @@ function Show-DeploymentTool {
     $pnlCfgWrap.BackColor = $cBg
 
     $grpCfg           = New-Object System.Windows.Forms.GroupBox
-    $grpCfg.Text      = ' Konfiguration'
+    $grpCfg.Text      = Get-String 'CfgGroup' ' Konfiguration'
     $grpCfg.Font      = $fHead
     $grpCfg.ForeColor = $cHeader
     $grpCfg.BackColor = $cPanel
@@ -533,21 +634,21 @@ function Show-DeploymentTool {
     $lblSrv  = New-CfgLabel  'Report Server URL:'
     $txtSrv  = New-CfgText   ''
     $txtSrv.ForeColor = [System.Drawing.Color]::FromArgb(130,130,130)
-    $txtSrv.Text      = 'Wird gesucht ...'
-    $btnConn = New-CfgButton 'Verbinden'
+    $txtSrv.Text      = Get-String 'SearchingUrl' 'Wird gesucht ...'
+    $btnConn = New-CfgButton (Get-String 'ConnectButton' 'Verbinden')
 
-    $lblSrc  = New-CfgLabel  'Quellverzeichnis:'
+    $lblSrc  = New-CfgLabel  (Get-String 'SourceFolderPath' 'Quellverzeichnis:')
     $txtSrc  = New-CfgText   ''
-    $btnBrw  = New-CfgButton 'Durchsuchen'
+    $btnBrw  = New-CfgButton (Get-String 'BrowseButton' 'Durchsuchen')
 
-    $lblTgt  = New-CfgLabel  'Zielordner (Server):'
+    $lblTgt  = New-CfgLabel  (Get-String 'TargetFolder' 'Zielordner (Server):')
     $txtTgt  = New-CfgText   ''
     $txtTgt.BackColor = [System.Drawing.Color]::FromArgb(238, 244, 252)
 
     $pnlHint           = New-Object System.Windows.Forms.Panel
     $pnlHint.Dock      = 'Fill'
     $lblHint           = New-Object System.Windows.Forms.Label
-    $lblHint.Text      = 'Im Baum links auswaehlen'
+    $lblHint.Text      = Get-String 'HintTree' 'Im Baum links auswaehlen'
     $lblHint.ForeColor = $cSkip
     $lblHint.Font      = $fSmall
     $lblHint.Dock      = 'Fill'
@@ -556,7 +657,7 @@ function Show-DeploymentTool {
 
     $lblCrd  = New-CfgLabel 'Authentifizierung:'
     $chkCrd  = New-Object System.Windows.Forms.CheckBox
-    $chkCrd.Text='Manuelle Credentials verwenden'; $chkCrd.Font=$fDef; $chkCrd.Dock='Fill'
+    $chkCrd.Text = Get-String 'ManualCreds' 'Manuelle Credentials verwenden'; $chkCrd.Font=$fDef; $chkCrd.Dock='Fill'
 
     $pnlCrd         = New-Object System.Windows.Forms.Panel
     $pnlCrd.Dock    = 'Fill'
@@ -564,14 +665,14 @@ function Show-DeploymentTool {
 
     $tlpCr = New-Object System.Windows.Forms.TableLayoutPanel
     $tlpCr.Dock='Fill'; $tlpCr.ColumnCount=4; $tlpCr.RowCount=1; $tlpCr.BackColor=$cPanel
-    [void]$tlpCr.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute,  62)))
+    [void]$tlpCr.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute,  90)))
     [void]$tlpCr.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent,  50)))
-    [void]$tlpCr.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute,  80)))
+    [void]$tlpCr.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute, 100)))
     [void]$tlpCr.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent,  50)))
 
-    $lU=New-Object System.Windows.Forms.Label; $lU.Text='User:';     $lU.Font=$fBold; $lU.Dock='Fill'; $lU.TextAlign='MiddleRight'
+    $lU=New-Object System.Windows.Forms.Label; $lU.Text=(Get-String 'User' 'User:');     $lU.Font=$fBold; $lU.Dock='Fill'; $lU.TextAlign='MiddleRight'
     $tU=New-Object System.Windows.Forms.TextBox; $tU.Dock='Fill';    $tU.Font=$fDef;  $tU.Text="$env:USERDOMAIN\$env:USERNAME"
-    $lP=New-Object System.Windows.Forms.Label; $lP.Text='Kennwort:'; $lP.Font=$fBold; $lP.Dock='Fill'; $lP.TextAlign='MiddleRight'
+    $lP=New-Object System.Windows.Forms.Label; $lP.Text=(Get-String 'Password' 'Kennwort:'); $lP.Font=$fBold; $lP.Dock='Fill'; $lP.TextAlign='MiddleRight'
     $tP=New-Object System.Windows.Forms.TextBox; $tP.Dock='Fill';    $tP.Font=$fDef;  $tP.PasswordChar=[char]0x2022
 
     $tlpCr.Controls.Add($lU,0,0); $tlpCr.Controls.Add($tU,1,0)
@@ -607,7 +708,7 @@ function Show-DeploymentTool {
 
     # --- Panel1: TreeView ---
     $grpTree           = New-Object System.Windows.Forms.GroupBox
-    $grpTree.Text      = ' Serverordner'
+    $grpTree.Text      = Get-String 'TreeGroup' ' Serverordner'
     $grpTree.Font      = $fHead
     $grpTree.ForeColor = $cHeader
     $grpTree.BackColor = $cPanel
@@ -673,7 +774,7 @@ function Show-DeploymentTool {
     $pnlDep.Padding = New-Object System.Windows.Forms.Padding(0,5,0,0)
 
     $btnDeploy           = New-Object System.Windows.Forms.Button
-    $btnDeploy.Text      = '  Deployment starten'
+    $btnDeploy.Text      = Get-String 'DeployButton' '  Deployment starten'
     $btnDeploy.Font      = New-Object System.Drawing.Font('Segoe UI',10,[System.Drawing.FontStyle]::Bold)
     $btnDeploy.Dock      = 'Right'
     $btnDeploy.Width     = 215
@@ -704,7 +805,7 @@ function Show-DeploymentTool {
 
     # splitV.Panel1: Dateiliste
     $grpFiles           = New-Object System.Windows.Forms.GroupBox
-    $grpFiles.Text      = ' Gefundene Dateien'
+    $grpFiles.Text      = Get-String 'FilesGroup' ' Gefundene Dateien'
     $grpFiles.Font      = $fHead
     $grpFiles.ForeColor = $cHeader
     $grpFiles.BackColor = $cPanel
@@ -714,10 +815,10 @@ function Show-DeploymentTool {
     $clv               = New-Object System.Windows.Forms.ListView
     $clv.Dock          = 'Fill'; $clv.View='Details'; $clv.CheckBoxes=$true
     $clv.FullRowSelect = $true;  $clv.GridLines=$true; $clv.Font=$fMono; $clv.BackColor=$cPanel
-    [void]$clv.Columns.Add('Datei',     220)
-    [void]$clv.Columns.Add('Typ',        72)
-    [void]$clv.Columns.Add('Groesse',    72)
-    [void]$clv.Columns.Add('Geaendert', 148)
+    [void]$clv.Columns.Add((Get-String 'ColFile' 'Datei'),     220)
+    [void]$clv.Columns.Add((Get-String 'ColType' 'Typ'),        72)
+    [void]$clv.Columns.Add((Get-String 'ColSize' 'Groesse'),    72)
+    [void]$clv.Columns.Add((Get-String 'ColModified' 'Geaendert'), 148)
     [void]$clv.Columns.Add('Status',    215)
 
     $pnlFBar        = New-Object System.Windows.Forms.Panel
@@ -740,7 +841,7 @@ function Show-DeploymentTool {
 
     # splitV.Panel2: Log
     $grpLog           = New-Object System.Windows.Forms.GroupBox
-    $grpLog.Text      = ' Deployment-Log'
+    $grpLog.Text      = Get-String 'LogGroup' ' Deployment-Log'
     $grpLog.Font      = $fHead
     $grpLog.ForeColor = $cHeader
     $grpLog.BackColor = $cPanel
@@ -1020,21 +1121,71 @@ function Show-DeploymentTool {
     # =========================================================================
     # Hilfsfunktionen
     # =========================================================================
+
+    # Translation map for log messages (German → English)
+    $logTranslations = @{
+        'Ordnerstruktur geladen - ' = 'Folder structure loaded - '
+        ' Ordner' = ' folders'
+        'Fehler Ordnerbaum:' = 'Error loading folder tree:'
+        'dtcSoftware Report Deployment Tool v4.0 bereit.' = 'dtcSoftware Report Deployment Tool v4.0 ready.'
+        'Benutzer:' = 'User:'
+        'Suche lokalen Report Server ...' = 'Searching local Report Server ...'
+        'Lokaler Report Server gefunden:' = 'Local Report Server found:'
+        'URL vorbelegt - bitte Verbinden klicken.' = 'URL preset - please click Connect.'
+        'Kein lokaler Report Server gefunden - URL manuell eingeben.' = 'No local Report Server found - enter URL manually.'
+        '1. Server-URL  2. Verbinden  3. Ordner  4. Scannen  5. Deployen' = '1. Server-URL  2. Connect  3. Folder  4. Scan  5. Deploy'
+        'fehlgeschlagen - versuche' = 'failed - trying'
+        'URL korrigiert auf' = 'URL corrected to'
+        'Verbunden:' = 'Connected:'
+        '.pbix Upload aktiviert (Power BI Report Server erkannt).' = '.pbix upload enabled (Power BI Report Server detected).'
+        '.pbix nur auf PBIRS verfuegbar (SSRS erkannt).' = '.pbix only available on PBIRS (SSRS detected).'
+        'Verbindungsfehler:' = 'Connection error:'
+        'Zielordner:' = 'Target folder:'
+        'Ordner angelegt:' = 'Folder created:'
+        'Fehler Ordner' = 'Error creating folder'
+        'Quellverzeichnis:' = 'Source folder:'
+        'Keine Dateien in:' = 'No files in:'
+        'Scan:' = 'Scan:'
+        ' Datei(en)' = ' file(s)'
+        'Log gespeichert:' = 'Log saved:'
+        '=== Deploy nach' = '=== Deploy to'
+        'Fehler Zielordner:' = 'Error target folder:'
+        'FEHLER:' = 'ERROR:'
+    }
+
+    function Translate-LogMessage {
+        param([string]$Message)
+        if ($script:CurrentLanguage -eq 'en') {
+            $result = $Message
+            foreach ($de in $logTranslations.Keys) {
+                $result = $result -replace [regex]::Escape($de), $logTranslations[$de]
+            }
+            return $result
+        }
+        return $Message
+    }
+
     function Write-Log {
         param([string]$Msg, [ValidateSet('Info','Success','Warning','Error','Skip','Header')][string]$Lv='Info')
         $col = switch($Lv){'Success'{$cOk}'Warning'{$cWarn}'Error'{$cErr}'Skip'{$cSkip}'Header'{$cAccent}default{$cLogFg}}
-        $pfx = switch($Lv){'Success'{'[OK]     '}'Warning'{'[WARN]   '}'Error'{'[FEHLER] '}'Skip'{'[SKIP]   '}'Header'{'========='}default{'[INFO]   '}}
+        $pfxDe = switch($Lv){'Success'{'[OK]     '}'Warning'{'[WARN]   '}'Error'{'[FEHLER] '}'Skip'{'[SKIP]   '}'Header'{'========='}default{'[INFO]   '}}
+        $pfxEn = switch($Lv){'Success'{'[OK]     '}'Warning'{'[WARN]   '}'Error'{'[ERROR]  '}'Skip'{'[SKIP]   '}'Header'{'========='}default{'[INFO]   '}}
+        $pfx = if ($script:CurrentLanguage -eq 'en') { $pfxEn } else { $pfxDe }
+        $translatedMsg = Translate-LogMessage $Msg
         $rtb.SelectionColor = $col
-        $rtb.AppendText("[$(Get-Date -Format 'HH:mm:ss')] $pfx $Msg`n")
+        $rtb.AppendText("[$(Get-Date -Format 'HH:mm:ss')] $pfx $translatedMsg`n")
         $rtb.ScrollToCaret()
     }
 
     function Write-MigLog {
         param([string]$Msg, [ValidateSet('Info','Success','Warning','Error','Skip','Header')][string]$Lv='Info')
         $col = switch($Lv){'Success'{$cOk}'Warning'{$cWarn}'Error'{$cErr}'Skip'{$cSkip}'Header'{$cAccent}default{$cLogFg}}
-        $pfx = switch($Lv){'Success'{'[OK]     '}'Warning'{'[WARN]   '}'Error'{'[FEHLER] '}'Skip'{'[SKIP]   '}'Header'{'========='}default{'[INFO]   '}}
+        $pfxDe = switch($Lv){'Success'{'[OK]     '}'Warning'{'[WARN]   '}'Error'{'[FEHLER] '}'Skip'{'[SKIP]   '}'Header'{'========='}default{'[INFO]   '}}
+        $pfxEn = switch($Lv){'Success'{'[OK]     '}'Warning'{'[WARN]   '}'Error'{'[ERROR]  '}'Skip'{'[SKIP]   '}'Header'{'========='}default{'[INFO]   '}}
+        $pfx = if ($script:CurrentLanguage -eq 'en') { $pfxEn } else { $pfxDe }
+        $translatedMsg = Translate-LogMessage $Msg
         $rtbMig.SelectionColor = $col
-        $rtbMig.AppendText("[$(Get-Date -Format 'HH:mm:ss')] $pfx $Msg`n")
+        $rtbMig.AppendText("[$(Get-Date -Format 'HH:mm:ss')] $pfx $translatedMsg`n")
         $rtbMig.ScrollToCaret()
     }
 
@@ -1247,7 +1398,12 @@ function Show-DeploymentTool {
         $fbd=New-Object System.Windows.Forms.FolderBrowserDialog
         $fbd.Description='Quellverzeichnis auswaehlen'; $fbd.ShowNewFolderButton=$false
         if($txtSrc.Text -and (Test-Path $txtSrc.Text)){$fbd.SelectedPath=$txtSrc.Text}
-        if($fbd.ShowDialog() -eq 'OK'){$txtSrc.Text=$fbd.SelectedPath; Write-Log "Quellverzeichnis: $($fbd.SelectedPath)" -Lv 'Info'}
+        if($fbd.ShowDialog() -eq 'OK'){
+            $txtSrc.Text=$fbd.SelectedPath
+            Write-Log "Quellverzeichnis: $($fbd.SelectedPath)" -Lv 'Info'
+            # Auto-Scan nach Verzeichnis-Auswahl
+            $btnScan.PerformClick()
+        }
     })
 
     $btnScan.Add_Click({
