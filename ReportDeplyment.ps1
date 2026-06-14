@@ -34,6 +34,93 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
+# =============================================================================
+# Microsoft ReportingServicesTools - Funktionen (kopiert)
+# =============================================================================
+
+function New-RsWebServiceProxy {
+    param(
+        [string]$ReportServerUri,
+        [System.Management.Automation.PSCredential]$Credential = $null
+    )
+
+    if ($ReportServerUri -notlike '*/') {
+        $ReportServerUri = $ReportServerUri + '/'
+    }
+    $reportServerUriObject = New-Object System.Uri($ReportServerUri)
+    $soapEndpointUriObject = New-Object System.Uri($reportServerUriObject, "ReportService2010.asmx")
+    $ReportServerUri = $soapEndpointUriObject.ToString()
+
+    if ($Credential) {
+        $proxy = New-WebServiceProxy -Uri $ReportServerUri -Credential $Credential -ErrorAction Stop
+    } else {
+        $proxy = New-WebServiceProxy -Uri $ReportServerUri -UseDefaultCredential -ErrorAction Stop
+    }
+    return $proxy
+}
+
+function New-RsFolder {
+    param(
+        [Parameter(Mandatory = $True)]
+        [string]$RsFolder,
+        [Parameter(Mandatory = $True)]
+        [string]$FolderName,
+        [string]$Description,
+        [string]$ReportServerUri,
+        [System.Management.Automation.PSCredential]$Credential = $null,
+        $Proxy = $null
+    )
+
+    if (-not $Proxy) {
+        $Proxy = New-RsWebServiceProxy -ReportServerUri $ReportServerUri -Credential $Credential
+    }
+
+    $namespace = $proxy.GetType().Namespace
+    $propertyDataType = "$namespace.Property"
+    $additionalProperties = New-Object System.Collections.Generic.List[$propertyDataType]
+
+    if ($Description) {
+        $descriptionProperty = New-Object $propertyDataType
+        $descriptionProperty.Name = 'Description'
+        $descriptionProperty.Value = $Description
+        $additionalProperties.Add($descriptionProperty)
+    }
+
+    $Proxy.CreateFolder($FolderName, $RsFolder, $additionalProperties) | Out-Null
+}
+
+function New-RsDataSource {
+    param(
+        [Parameter(Mandatory = $True)]
+        [string]$RsFolder,
+        [Parameter(Mandatory = $True)]
+        [string]$Name,
+        [Parameter(Mandatory = $True)]
+        [string]$Extension,
+        [Parameter(Mandatory = $True)]
+        [string]$ConnectionString,
+        [Parameter(Mandatory = $True)]
+        [string]$CredentialRetrieval,
+        [string]$ReportServerUri,
+        [System.Management.Automation.PSCredential]$Credential = $null,
+        $Proxy = $null,
+        [switch]$Overwrite
+    )
+
+    if (-not $Proxy) {
+        $Proxy = New-RsWebServiceProxy -ReportServerUri $ReportServerUri -Credential $Credential
+    }
+
+    $namespace = $proxy.GetType().Namespace
+    $dsDef = New-Object ($namespace + '.DataSourceDefinition')
+    $dsDef.ConnectString = $ConnectionString
+    $dsDef.Extension = $Extension
+    $dsDef.CredentialRetrieval = $CredentialRetrieval
+    $dsDef.Enabled = $true
+
+    $Proxy.CreateDataSource($Name, $RsFolder, $Overwrite, $dsDef, $null) | Out-Null
+}
+
 # ---------------------------------------------------------------------------
 # SSL - akzeptiert selbstsignierte / interne Zertifikate
 # ---------------------------------------------------------------------------
@@ -180,67 +267,434 @@ function Repair-RDLContent {
     } catch { return $RawBytes }
 }
 
+function New-RSDataSourceWithFolder {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ReportServerUri,
+        [Parameter(Mandatory)]
+        [string]$FolderPath,
+        [Parameter(Mandatory)]
+        [string]$DataSourceName,
+        [Parameter(Mandatory)]
+        [string]$ConnectionString,
+        [Parameter(Mandatory)]
+        [ValidateSet("Integrated", "None", "Prompt", "Store")]
+        [string]$CredentialRetrieval,
+        [Parameter()]
+        [string]$UserName,
+        [Parameter()]
+        [string]$Password,
+        [Parameter()]
+        [string]$DataSourceType = "SQL"
+    )
+
+    # SOAP-Proxy erstellen
+    $wsdlUrl = "$ReportServerUri/ReportService2010.asmx?wsdl"
+    Write-Host "Verbinde mit Report Server ..." -ForegroundColor Cyan
+    try {
+        $ssrs = New-WebServiceProxy -Uri $wsdlUrl -UseDefaultCredential -ErrorAction Stop
+    }
+    catch {
+        Write-Error "Verbindungsfehler: $_"
+        return $false
+    }
+
+    # Dynamisch den Namespace des Proxys ermitteln
+    $ns = $ssrs.GetType().Namespace
+
+    # ----- 1. Ordner rekursiv anlegen (mit Hidden = false) -----
+    function Ensure-VisibleFolder {
+        param([string]$Path)
+        $normalized = $Path.TrimStart('/').TrimEnd('/')
+        if ([string]::IsNullOrEmpty($normalized)) { return $true }
+
+        $parts = $normalized -split '/'
+        $current = "/"
+        foreach ($part in $parts) {
+            $newPath = if ($current -eq "/") { "/$part" } else { "$current/$part" }
+            $newPath = $newPath -replace '//','/'
+            try {
+                $ssrs.GetItemType($newPath) | Out-Null
+                Write-Verbose "Ordner $newPath existiert bereits."
+                # Sicherstellen, dass der Ordner sichtbar ist
+                $prop = New-Object ($ns + ".Property")
+                $prop.Name = "Hidden"
+                $prop.Value = "false"
+                $ssrs.SetProperties($newPath, @($prop))
+            }
+            catch {
+                $parent = if ($current -eq "/") { "/" } else { $current }
+                Write-Host "Erstelle Ordner '$part' in '$parent' ..." -ForegroundColor Cyan
+                $ssrs.CreateFolder($part, $parent, $null) | Out-Null
+                # Nach Erstellung versteckt-Flag entfernen
+                $prop = New-Object ($ns + ".Property")
+                $prop.Name = "Hidden"
+                $prop.Value = "false"
+                $ssrs.SetProperties($newPath, @($prop))
+                Write-Host "Ordner $newPath erstellt und sichtbar gemacht." -ForegroundColor Green
+            }
+            $current = $newPath
+        }
+        return $true
+    }
+
+    Write-Host "Stelle Ordner '$FolderPath' sicher (rekursiv, sichtbar)..." -ForegroundColor Cyan
+    $folderOk = Ensure-VisibleFolder -Path $FolderPath
+    if (-not $folderOk) {
+        Write-Error "Ordner konnte nicht erstellt werden."
+        return $false
+    }
+
+    # ----- 2. DataSource anlegen -----
+    Write-Host "Erstelle DataSource '$DataSourceName' in '$FolderPath' ..." -ForegroundColor Cyan
+    $defType = $ns + ".DataSourceDefinition"
+    $definition = New-Object $defType
+    $definition.ConnectString = $ConnectionString
+    $definition.Extension = $DataSourceType
+    $definition.Enabled = $true
+    $definition.CredentialRetrieval = $CredentialRetrieval
+
+    if ($CredentialRetrieval -eq "Store") {
+        if ([string]::IsNullOrEmpty($UserName) -or [string]::IsNullOrEmpty($Password)) {
+            Write-Error "Bei 'Store' müssen UserName und Password angegeben werden."
+            return $false
+        }
+        $definition.UserName = $UserName
+        $definition.Password = $Password
+    }
+
+    try {
+        $ssrs.CreateDataSource($DataSourceName, $FolderPath, $true, $definition, $null) | Out-Null
+        Write-Host "DataSource '$DataSourceName' erfolgreich erstellt." -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Error "Fehler beim Erstellen der DataSource: $_"
+        return $false
+    }
+}
+
+function Set-RSReportsDataSource {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ReportServerUri,
+        [Parameter(Mandatory)]
+        [string]$ReportsFolderPath,
+        [Parameter(Mandatory)]
+        [string]$TargetSharedDataSourcePath
+    )
+
+    $wsdlUrl = "$ReportServerUri/ReportService2010.asmx?wsdl"
+    $ssrs = New-WebServiceProxy -Uri $wsdlUrl -UseDefaultCredential
+
+    $allItems = $ssrs.ListChildren($ReportsFolderPath, $false)
+    $reports = $allItems | Where-Object { $_.TypeName -eq "Report" }
+
+    if ($reports.Count -eq 0) {
+        Write-Host "Keine Berichte im Ordner '$ReportsFolderPath' gefunden." -ForegroundColor Yellow
+        return
+    }
+
+    $dsRefType = $ssrs.GetType().Namespace + ".DataSourceReference"
+    $dsType = $ssrs.GetType().Namespace + ".DataSource"
+
+    $dataSourceRef = New-Object $dsRefType
+    $dataSourceRef.Reference = $TargetSharedDataSourcePath
+
+    foreach ($report in $reports) {
+        Write-Host "Bearbeite Bericht: $($report.Path)" -ForegroundColor Cyan
+        try {
+            $currentDataSources = $ssrs.GetItemDataSources($report.Path)
+            $newDataSourcesArray = New-Object ($dsType + "[]") $currentDataSources.Length
+
+            for ($i = 0; $i -lt $currentDataSources.Length; $i++) {
+                $newDS = New-Object $dsType
+                $newDS.Name = $currentDataSources[$i].Name
+                $newDS.Item = $dataSourceRef
+                $newDataSourcesArray[$i] = $newDS
+            }
+            $ssrs.SetItemDataSources($report.Path, $newDataSourcesArray)
+            Write-Host "  Verknüpfung mit '$TargetSharedDataSourcePath' erfolgreich." -ForegroundColor Green
+        }
+        catch {
+            Write-Error "  Fehler bei $($report.Path): $_"
+        }
+    }
+}
+
+function New-RSFolder {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ReportServerUri,
+        [Parameter(Mandatory)]
+        [string]$FolderPath
+    )
+
+    $soapEndpoint = "$ReportServerUri/ReportService2010.asmx?wsdl"
+    try {
+        $ssrsProxy = New-WebServiceProxy -Uri $soapEndpoint -UseDefaultCredential -ErrorAction Stop
+    } catch {
+        return $false
+    }
+
+    function Create-FolderRecursive {
+        param([string]$ParentPath, [string]$FolderName)
+        try {
+            $ssrsProxy.CreateFolder($FolderName, $ParentPath, $null)
+            return $true
+        } catch {
+            return $false
+        }
+    }
+
+    function Ensure-FolderByPath {
+        param([string]$Path)
+        $normalizedPath = $Path.TrimStart('/').TrimEnd('/')
+        if ([string]::IsNullOrWhiteSpace($normalizedPath)) { return $true }
+        $pathParts = $normalizedPath -split '/'
+        $currentPath = ""
+        for ($i = 0; $i -lt $pathParts.Count; $i++) {
+            $folderName = $pathParts[$i]
+            $currentPath += "/$folderName"
+            try {
+                $ssrsProxy.GetItemType($currentPath) | Out-Null
+            } catch {
+                $parentPath = if ($i -eq 0) { "/" } else { $currentPath.Substring(0, $currentPath.LastIndexOf('/')) }
+                if ($parentPath -eq "") { $parentPath = "/" }
+                $createResult = Create-FolderRecursive -ParentPath $parentPath -FolderName $folderName
+                if (-not $createResult) { return $false }
+            }
+        }
+        return $true
+    }
+
+    $result = Ensure-FolderByPath -Path $FolderPath
+    return $result
+}
+
+function New-VisibleRSFolder {
+    param(
+        [string]$ReportServerUri,
+        [string]$FolderPath
+    )
+
+    $soapEndpoint = "$ReportServerUri/ReportService2010.asmx?wsdl"
+    try {
+        $ssrsProxy = New-WebServiceProxy -Uri $soapEndpoint -UseDefaultCredential -ErrorAction Stop
+    } catch {
+        return $false
+    }
+
+    $folderName = $FolderPath.TrimStart('/')
+    $parentFolder = "/"
+
+    $propertyType = $ssrsProxy.GetType().Namespace + ".Property"
+    $properties = @(New-Object $propertyType)
+    $properties[0].Name = "Hidden"
+    $properties[0].Value = "false"
+
+    try {
+        $ssrsProxy.CreateFolder($folderName, $parentFolder, $properties)
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function New-RSDataSourceSOAP {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ReportServerUri,
+        [Parameter(Mandatory)]
+        [string]$FolderPath,
+        [Parameter(Mandatory)]
+        [string]$DataSourceName,
+        [Parameter(Mandatory)]
+        [string]$ConnectionString,
+        [Parameter(Mandatory)]
+        [ValidateSet("Integrated", "None", "Prompt", "Store")]
+        [string]$CredentialRetrieval,
+        [Parameter()]
+        [string]$UserName,
+        [Parameter()]
+        [string]$Password,
+        [Parameter()]
+        [string]$DataSourceType = "SQL"
+    )
+
+    $wsdlUrl = "$ReportServerUri/ReportService2010.asmx?wsdl"
+    try {
+        $ssrs = New-WebServiceProxy -Uri $wsdlUrl -UseDefaultCredential -ErrorAction Stop
+    } catch {
+        return $false
+    }
+
+    function Ensure-Folder {
+        param([string]$Path)
+        $normalized = $Path.TrimStart('/').TrimEnd('/')
+        if ([string]::IsNullOrEmpty($normalized)) { return $true }
+        $parts = $normalized -split '/'
+        $current = "/"
+        foreach ($part in $parts) {
+            $current = if ($current -eq "/") { "/$part" } else { "$current/$part" }
+            $current = $current -replace '//','/'
+            try {
+                $ssrs.GetItemType($current) | Out-Null
+            } catch {
+                $parent = if ($current -eq "/$part") { "/" } else { $current.Substring(0, $current.LastIndexOf('/')) }
+                if ($parent -eq "") { $parent = "/" }
+                $ssrs.CreateFolder($part, $parent, $null) | Out-Null
+            }
+        }
+        return $true
+    }
+
+    Ensure-Folder -Path $FolderPath
+
+    $dataSourceDefType = $ssrs.GetType().Namespace + ".DataSourceDefinition"
+    $definition = New-Object -TypeName $dataSourceDefType
+    $definition.ConnectString = $ConnectionString
+    $definition.Extension = $DataSourceType
+    $definition.Enabled = $true
+    $definition.CredentialRetrieval = $CredentialRetrieval
+
+    if ($CredentialRetrieval -eq "Store") {
+        $definition.UserName = $UserName
+        $definition.Password = $Password
+    }
+
+    $parentPath = if ($FolderPath -eq "/" -or $FolderPath -eq "") { "/" } else { $FolderPath.TrimEnd('/') }
+
+    try {
+        $ssrs.CreateDataSource($DataSourceName, $parentPath, $true, $definition, $null)
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Deploy-Report {
     param([string]$ApiBase, [string]$FilePath, [string]$TargetFolder,
           [System.Management.Automation.PSCredential]$Credential = $null)
-    $name     = [System.IO.Path]::GetFileNameWithoutExtension($FilePath).Trim()
-    $ipath    = "$TargetFolder/$name"
-    $rawBytes = [System.IO.File]::ReadAllBytes($FilePath)
-    $bytes    = Repair-RDLContent -RawBytes $rawBytes
-    # $bytes    = $rawBytes  # RDL direkt ohne Repair
-    $content  = [Convert]::ToBase64String($bytes)
-    $existing = Get-SSRSItemExists -ApiBase $ApiBase -ItemPath $ipath -Credential $Credential
-    if ($existing) {
-        Invoke-SSRSRequest -Uri "$ApiBase/CatalogItems($($existing.Id))" -Method 'DELETE' -Credential $Credential | Out-Null
+
+    try {
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($FilePath).Trim()
+        $srvUri = $ApiBase -replace '/api/v2\.0.*', ''
+
+        $proxy = New-RsWebServiceProxy -ReportServerUri $srvUri -Credential $Credential
+
+        # Ordner erstellen falls nicht vorhanden
+        $folderParts = $TargetFolder -split '/' | Where-Object { $_ }
+        $currentPath = ''
+        foreach ($part in $folderParts) {
+            $currentPath = "$currentPath/$part"
+            try {
+                $proxy.GetItemType($currentPath) | Out-Null
+            } catch {
+                $parentPath = if ($currentPath.LastIndexOf('/') -gt 0) { $currentPath.Substring(0, $currentPath.LastIndexOf('/')) } else { '/' }
+                New-RsFolder -RsFolder $parentPath -FolderName $part -ReportServerUri $srvUri -Credential $Credential -Proxy $proxy
+            }
+        }
+
+        # Datei als Bytes lesen
+        $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+
+        # Properties
+        $props = @()
+        $prop = New-Object ($proxy.GetType().Namespace + '.Property')
+        $prop.Name = 'Description'
+        $prop.Value = ''
+        $props += $prop
+
+        # Upload
+        $warnings = $null
+        $proxy.CreateCatalogItem('Report', $name, $TargetFolder, $true, $bytes, $props, [ref]$warnings) | Out-Null
+
+        return 'CREATED'
+    } catch {
+        return "ERROR: $($_.Exception.Message)"
     }
-    Invoke-SSRSRequest -Uri "$ApiBase/Reports" -Method 'POST' -Credential $Credential `
-        -Body @{ Name=$name; Path=$ipath; Content=$content } | Out-Null
-    if ($existing) { return 'UPDATED' } else { return 'CREATED' }
 }
 
 function Deploy-DataSource {
     param([string]$ApiBase, [string]$FilePath, [string]$TargetFolder,
           [System.Management.Automation.PSCredential]$Credential = $null)
-    $name  = [System.IO.Path]::GetFileNameWithoutExtension($FilePath).Trim()
-    $ipath = "$TargetFolder/$name"
-    if (Get-SSRSItemExists -ApiBase $ApiBase -ItemPath $ipath -Credential $Credential) {
-        return 'SKIPPED (bereits vorhanden - Connection bleibt erhalten)'
+
+    try {
+        [xml]$rds = Get-Content -Path $FilePath -Encoding UTF8
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($FilePath).Trim()
+        $cp = $rds.RptDataSource.ConnectionProperties
+
+        $connStr = if ($cp.ConnectString) { $cp.ConnectString } else { '' }
+        $ext = if ($cp.Extension) { $cp.Extension } else { 'SQL' }
+        $credRet = if ($cp.IntegratedSecurity -eq 'true') { 'Integrated' } else { 'None' }
+
+        $srvUri = $ApiBase -replace '/api/v2\.0.*', ''
+        $dsFolder = "/Data Sources"
+
+        # Step 1: Ordner erstellen (rekursiv)
+        New-RSFolder -ReportServerUri $srvUri -FolderPath $dsFolder | Out-Null
+
+        # Step 1: Ordner + DataSource erstellen (zusammengefasst)
+        $result = New-RSDataSourceWithFolder -ReportServerUri $srvUri -FolderPath $dsFolder `
+            -DataSourceName $name -ConnectionString $connStr -CredentialRetrieval $credRet `
+            -DataSourceType $ext
+
+        if ($result) {
+            return 'CREATED'
+        } else {
+            return 'ERROR'
+        }
+    } catch {
+        return "ERROR: $($_.Exception.Message)"
     }
-    [xml]$x = Get-Content -Path $FilePath -Encoding UTF8
-    $cp     = $x.RptDataSource.ConnectionProperties
-    $credRaw = if ($cp.IntegratedSecurity -eq 'true') { 'integrated' }
-               elseif (-not [string]::IsNullOrWhiteSpace($cp.CredentialRetrieval)) {
-                   switch ($cp.CredentialRetrieval.Trim().ToLower()) {
-                       'integrated' { 'integrated' }
-                       'prompt'     { 'prompt'     }
-                       'store'      { 'store'      }
-                       'none'       { 'none'       }
-                       default      { 'integrated' }
-                   }
-               } else { 'integrated' }
-    Invoke-SSRSRequest -Uri "$ApiBase/DataSources" -Method 'POST' -Credential $Credential -Body @{
-        Name                = $name
-        Path                = $ipath
-        DataSourceType      = if ($cp.Extension)     { $cp.Extension }     else { 'SQL' }
-        ConnectionString    = if ($cp.ConnectString) { $cp.ConnectString } else { '' }
-        CredentialRetrieval = $credRaw
-    } | Out-Null
-    return 'CREATED'
 }
 
 function Deploy-SharedDataset {
     param([string]$ApiBase, [string]$FilePath, [string]$TargetFolder,
           [System.Management.Automation.PSCredential]$Credential = $null)
-    $name     = [System.IO.Path]::GetFileNameWithoutExtension($FilePath).Trim()
-    $ipath    = "$TargetFolder/$name"
-    $content  = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($FilePath))
-    $existing = Get-SSRSItemExists -ApiBase $ApiBase -ItemPath $ipath -Credential $Credential
-    if ($existing) {
-        Invoke-SSRSRequest -Uri "$ApiBase/CatalogItems($($existing.Id))" -Method 'DELETE' -Credential $Credential | Out-Null
+
+    try {
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($FilePath).Trim()
+        $srvUri = $ApiBase -replace '/api/v2\.0.*', ''
+
+        $proxy = New-RsWebServiceProxy -ReportServerUri $srvUri -Credential $Credential
+
+        # Ordner erstellen falls nicht vorhanden
+        $folderParts = $TargetFolder -split '/' | Where-Object { $_ }
+        $currentPath = ''
+        foreach ($part in $folderParts) {
+            $currentPath = "$currentPath/$part"
+            try {
+                $proxy.GetItemType($currentPath) | Out-Null
+            } catch {
+                $parentPath = if ($currentPath.LastIndexOf('/') -gt 0) { $currentPath.Substring(0, $currentPath.LastIndexOf('/')) } else { '/' }
+                New-RsFolder -RsFolder $parentPath -FolderName $part -ReportServerUri $srvUri -Credential $Credential -Proxy $proxy
+            }
+        }
+
+        # Datei als Bytes lesen
+        $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+
+        # Properties
+        $props = @()
+        $prop = New-Object ($proxy.GetType().Namespace + '.Property')
+        $prop.Name = 'Description'
+        $prop.Value = ''
+        $props += $prop
+
+        # Upload
+        $warnings = $null
+        $proxy.CreateCatalogItem('DataSet', $name, $TargetFolder, $true, $bytes, $props, [ref]$warnings) | Out-Null
+
+        return 'CREATED'
+    } catch {
+        return "ERROR: $($_.Exception.Message)"
     }
-    Invoke-SSRSRequest -Uri "$ApiBase/DataSets" -Method 'POST' -Credential $Credential `
-        -Body @{ Name=$name; Path=$ipath; Content=$content } | Out-Null
-    if ($existing) { return 'UPDATED' } else { return 'CREATED' }
 }
 
 # =============================================================================
@@ -1456,12 +1910,20 @@ function Show-DeploymentTool {
         try { New-SSRSFolderRecursive -ApiBase $script:ApiBase -FolderPath $tgt -Credential $cred }
         catch { Write-Log "Fehler Zielordner: $($_.Exception.Message)" -Lv 'Error'; $btnDeploy.Enabled=$true; $btnScan.Enabled=$true; $btnConn.Enabled=$true; return }
 
+        $dataSourcesToBind = @()
         foreach($item in $sel){
             $fp=$item.Tag; $fn=$item.SubItems[0].Text; $typ=$item.SubItems[1].Text
             try {
                 $res=switch($typ){
                     'Report'  {Deploy-Report        -ApiBase $script:ApiBase -FilePath $fp -TargetFolder $tgt -Credential $cred}
-                    'DSrc'    {Deploy-DataSource    -ApiBase $script:ApiBase -FilePath $fp -TargetFolder $tgt -Credential $cred}
+                    'DSrc'    {
+                        $dsRes = Deploy-DataSource -ApiBase $script:ApiBase -FilePath $fp -TargetFolder $tgt -Credential $cred
+                        if ($dsRes -eq 'CREATED') {
+                            $dsName = [System.IO.Path]::GetFileNameWithoutExtension($fp)
+                            $dataSourcesToBind += @{Folder=$tgt; Name=$dsName}
+                        }
+                        $dsRes
+                    }
                     'Dataset' {Deploy-SharedDataset -ApiBase $script:ApiBase -FilePath $fp -TargetFolder $tgt -Credential $cred}
                     'PowerBI' {
                         if($script:IsPBIRS){
@@ -1483,6 +1945,22 @@ function Show-DeploymentTool {
             }
             $pbProg.Value++
             [System.Windows.Forms.Application]::DoEvents()
+        }
+
+        # Step 2: Alle Reports mit ihren DataSources verbinden (NACH dem Deployment)
+        if ($dataSourcesToBind.Count -gt 0) {
+            Write-Log "Verbinde Reports mit DataSources ..." -Lv 'Info'
+            $srvUri = $script:ApiBase -replace '/api/v2\.0.*', ''
+            foreach ($ds in $dataSourcesToBind) {
+                try {
+                    $dsPath = "$($ds.Folder)/$($ds.Name)" -replace '//','/'
+                    Set-RSReportsDataSource -ReportServerUri $srvUri -ReportsFolderPath $ds.Folder `
+                        -TargetSharedDataSourcePath "/Data Sources/$($ds.Name)" | Out-Null
+                    Write-Log "Reports in $($ds.Folder) mit DataSource '$($ds.Name)' verbunden." -Lv 'Success'
+                } catch {
+                    Write-Log "Fehler beim Verbinden von Reports mit DataSource '$($ds.Name)': $($_.Exception.Message)" -Lv 'Error'
+                }
+            }
         }
 
         $sum="Abgeschlossen:  $ok OK  |  $sk Uebersprungen  |  $er Fehler"
