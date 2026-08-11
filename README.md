@@ -4,18 +4,22 @@ PowerShell WinForms-Tool für das Deployment von SQL Server Reporting Services (
 
 ## Übersicht
 
-`SSRSDeploymentTool` ist eine grafische PowerShell-Anwendung (WinForms) zum Deployen von SSRS-Reports, Datenquellen und Shared Datasets über die SSRS REST API v2.0. Bestehende Verbindungseinstellungen von Datenquellen bleiben beim Deployment erhalten.
+`SSRSDeploymentTool` ist eine grafische PowerShell-Anwendung (WinForms) zum Deployen von SSRS-Reports, Datenquellen und Shared Datasets über die SSRS REST API v2.0. Bestehende Verbindungseinstellungen von Datenquellen bleiben beim Deployment erhalten. Seit v4.0.0 wird zusätzlich Power BI Report Server (PBIRS) sowie ein eigener Migration-Tab (Export/Import zwischen Servern) unterstützt.
 
-**Version:** 3.0.1 | **Getestet auf:** SQL Server 2019 / 2022 / 2025, SSRS 16.x
+**Version:** 4.0.0 | **Getestet auf:** SQL Server 2022, SSRS 16.x / PBIRS
 
 ## Features
 
 - **WinForms GUI**: TreeView des SSRS-Serverordners links, Deployment-Konfiguration rechts
 - **Reports (.rdl)**: werden immer überschrieben
+- **Power BI Reports (.pbix)**: nur auf Power BI Report Server (PBIRS)
 - **Datenquellen (.rds/.rsds)**: bestehende Verbindungen bleiben erhalten, neue werden angelegt
 - **Shared Datasets (.rsd)**: werden immer überschrieben
 - **Authentifizierung**: Windows-Auth (automatisch) oder manuelle Credentials
 - **Serverordner-Verwaltung**: TreeView mit Rechtsklick → Neuer Ordner
+- **Migration-Tab**: Export von einem Quell-SSRS in ein Zwischenverzeichnis, Import in ein Ziel-SSRS
+- **Sprachauswahl**: Deutsch / Englisch (Strings/de.ps1, Strings/en.ps1)
+- **Auto-Scan**: Ordner werden automatisch nach deploybaren Dateien durchsucht
 - **RDL-Fixes**: Undeklarierten `df:`-Namespace-Präfix wird vor Upload automatisch ergänzt (keine Änderung an Originaldateien)
 - **TLS 1.2**: Explizit aktiviert — funktioniert auch mit selbstsignierten / internen Zertifikaten
 
@@ -33,7 +37,7 @@ PowerShell WinForms-Tool für das Deployment von SQL Server Reporting Services (
 # Direkt starten
 .\ReportDeplyment.ps1
 
-# Oder per Doppelklick auf Install.cmd (cross-domain Share)
+# Oder per Doppelklick auf Start-SSRSDeployment.cmd (einheitlicher Starter)
 ```
 
 ## Deployment-Verhalten
@@ -49,13 +53,20 @@ PowerShell WinForms-Tool für das Deployment von SQL Server Reporting Services (
 ```
 SSRSDeploymentTool/
 ├── ReportDeplyment.ps1                    # Hauptskript (WinForms GUI + REST API Logik)
-├── SSRS_Deployment_Tool_v3.html           # Technische Dokumentation
-└── SSRS_Deployment_Tool_v3_Dokumentation.docx
+├── Start-SSRSDeployment.cmd               # Einheitlicher Starter
+├── Strings/                               # de.ps1 / en.ps1 (Sprachauswahl)
+├── Docs/                                  # Präsentation und technische Doku
+└── CHANGELOG.md
 ```
 
 ## Version
 
-- **3.0.1** — Aktuelle Version
+Siehe [CHANGELOG.md](CHANGELOG.md) für die vollständige Historie.
+
+- **4.0.0** — Aktuelle Version
+  - PBIRS-Support (.pbix)
+  - Migration-Tab (Export/Import zwischen Servern)
+  - Sprachsystem (DE/EN) & Auto-Scan
   - SSRS REST API v2.0
   - RDL df:-Namespace Fix
   - TLS 1.2 / selbstsignierte Zertifikate
