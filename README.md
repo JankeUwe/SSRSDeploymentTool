@@ -73,5 +73,6 @@ Siehe [CHANGELOG.md](CHANGELOG.md) für die vollständige Historie.
 
 ## Mehr Informationen
 
+- Projektseite: [powershelldba.de/ssrsdeploymenttool](https://www.powershelldba.de/ssrsdeploymenttool/)
 - Website: [www.powershelldba.de](https://www.powershelldba.de)
 - Entwickler: Uwe Janke, Senior IT-Spezialist / SQL Server DBA
